@@ -15,9 +15,20 @@
 - Persist the onboarding coordinator for later CLI commands; preserve dev/local endpoints and keep explicit test configs isolated. Add a scoped test-Mac reset script; report incomplete unenrollment cleanup, including keychain failures.
 - Report verified readiness from fresh daemon state. Reuse standalone enrollment/login services and verified, resumable downloads; preserve the existing idle-memory policy during onboarding.
 
+## Unreleased — stats request-flow refresh
+
+- Restore Stats refreshes on large usage windows by aggregating request origins before looking up provider locations. Preserve weighted coordinates, request/token counts, and the top-50 flow limit while avoiding large temporary sorts.
+
 ## Unreleased — provider console entry
 
 - Open the provider workspace directly from the console home page, removing the Consumer/Provider selection page. Keep chat and API access in workspace navigation.
+
+## Unreleased — international bank withdrawals
+
+- Add a Stripe Global Payouts route enabled by default in the next production release for additional bank-payout countries, including India, alongside existing Connect withdrawals. Providers review a local-currency estimate before confirming.
+- Keep Connect withdrawals independent of browser confirmation storage. Stop automatic retries for ambiguous payouts requiring manual review and show their reserved-funds status in history.
+- Show recipient deposit limits and retain quoted Stripe fees for operator review. Continue reconciling existing payouts after funding-account changes and safely release unsubmitted confirmations when payouts are paused.
+- Use one earned-balance ledger across both routes, recover confirmations after browser reloads, preserve definitive rejections across refund failures, and reconcile bank returns exactly once. Prune expired unconfirmed quotes. Display sent transfers separately from bank receipt.
 
 ## Unreleased — GPT-OSS prefill and decode
 
