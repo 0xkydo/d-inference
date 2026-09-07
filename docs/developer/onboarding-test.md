@@ -1,12 +1,37 @@
 # Test provider onboarding on a Mac
 
-> Last updated: 2026-09-07 · commit `f345cad60`
+> Last updated: 2026-09-07 · commit `9aec02d84`
 
 Test the real installer, device enrollment, account linkage, model downloads,
 and background startup on a physical Apple Silicon Mac. Use the reset script
 to repeat first-time setup without redownloading models on every pass.
 
-## Prerequisites
+## Local UI iteration without release signing
+
+For interactive UI iteration, run the local debug executable with its sibling
+Bubble Tea companion. Swift and Go local builds carry ad-hoc signatures; this
+does not require a Developer ID certificate, notarization, or a GitHub workflow.
+Build with `make provider-build provider-tui-build` when needed, then run from
+the repository root:
+
+```bash
+# Optional fresh-setup reset: bash scripts/onboarding/reset.sh --apply --cli /absolute/path/to/signed/darkbloom
+# Reset removes known local install/config/identity/log state, preserving shared models.
+# Skip reset to retain enrollment/login and test resume.
+provider-swift/.build/debug/darkbloom start --tui \
+  --coordinator-url https://api.darkbloom.dev
+```
+
+The human operates enrollment, browser account linkage and downloads. These
+use the existing services; already-completed steps may be skipped. Quit with
+`q` at the final Start screen. This exercises the actual onboarding UI and
+Swift services, but does not test the installer, privileged identity access,
+APNs/MDA acceptance or verified serving. It does not replace the signed install.
+Any reset must use a working signed cleanup CLI; do not substitute the ad-hoc
+build to bypass a keychain cleanup failure. Remove the Darkbloom profile manually
+only when intentionally repeating fresh enrollment.
+
+## Signed installer prerequisites
 
 - Use an Apple Silicon Mac with a logged-in desktop session and the supported
   [macOS/security configuration](../provider/hardware-requirements.md). The
