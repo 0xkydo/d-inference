@@ -44,8 +44,20 @@ actor FixtureServices: OnboardingServices {
             if has(id+"-complete") { log("reuse:"+id); continue }
             log((has(id+".part") ? "resume:" : "download:")+id); try mark(id+".part")
             do {
-                progress(C.Progress(modelID: id, file: String(repeating: "w", count: Int(ProcessInfo.processInfo.environment["FIXTURE_PROGRESS_BYTES"] ?? "19") ?? 19), bytes: 512, total: 1024, stage: "transferring"))
-                try await Task.sleep(nanoseconds: delay*1_000_000)
+                for step in 0..<5 {
+                    let bytes = Int64(1_000_000_000 + step * 200_000_000)
+                    var frame = C.Progress(modelID: id, file: String(repeating: "w", count: Int(ProcessInfo.processInfo.environment["FIXTURE_PROGRESS_BYTES"] ?? "19") ?? 19), bytes: bytes, total: 4_000_000_000, stage: "transferring")
+                    frame.models = [C.DownloadItem(id: id, bytes: bytes, total: 4_000_000_000, stage: "transferring")]
+                    frame.files = [
+                        C.DownloadItem(id: "model-00001-of-00002.safetensors", bytes: bytes / 2, total: 2_000_000_000, stage: "transferring"),
+                        C.DownloadItem(id: "model-00002-of-00002.safetensors", bytes: bytes / 2, total: 2_000_000_000, stage: "transferring"),
+                        C.DownloadItem(id: "config.json", bytes: 1024, total: 1024, stage: "completed")
+                    ]
+                    frame.fileCount = 3
+                    frame.networkBytes = Int64(step * 200_000_000)
+                    progress(frame)
+                    try await Task.sleep(nanoseconds: delay*1_000_000 / 5)
+                }
                 progress(C.Progress(modelID: id, file: "weights.safetensors", bytes: 1024, total: 1024, stage: "verifying"))
                 try await Task.sleep(nanoseconds: 10_000_000)
                 try mark(id+"-complete")

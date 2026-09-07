@@ -25,6 +25,7 @@ type model struct {
 	nextID         int
 	problem        string
 	progress       *progress
+	downloadClock  downloadClock
 	code           *linkCode
 	send           func(command) error
 	stop           func()
@@ -55,6 +56,11 @@ func (m *model) action(action string, ids []string) tea.Cmd {
 }
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case downloadTick:
+		if m.state != nil && m.state.Phase == "downloading" && !m.quitting {
+			m.downloadClock.now = time.Now()
+			return m, nextDownloadTick()
+		}
 	case enrollmentPoll:
 		if !m.quitting && !m.busy && m.state != nil && m.state.Phase == "enrollment_pending" && m.state.Revision == msg.revision {
 			return m, m.action("refresh", nil)
@@ -80,12 +86,19 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if m.state == nil || m.state.Phase != e.Snapshot.Phase {
 				m.bodyScroll = 0
+				if e.Snapshot.Phase == "downloading" {
+					m.downloadClock = downloadClock{started: time.Now(), now: time.Now()}
+				}
 			}
+			enteringDownload := e.Snapshot.Phase == "downloading" && (m.state == nil || m.state.Phase != "downloading")
 			m.state = e.Snapshot
 			m.busy = m.state.Phase == "downloading"
 			if m.state.Phase != "downloading" {
 				m.progress = nil
 				m.code = nil
+			}
+			if enteringDownload {
+				return m, tea.Batch(m.nextEvent(), nextDownloadTick())
 			}
 			if m.state.Phase == "models" {
 				m.selected = map[string]bool{}
@@ -100,7 +113,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor = min(m.cursor, max(0, len(m.visible())-1))
 			}
 		case "progress":
+			if m.progress == nil || m.progress.ModelID != e.Progress.ModelID {
+				m.bodyScroll = 0
+			}
 			m.progress = e.Progress
+			m.downloadClock.observe(e.Progress, time.Now())
 		case "link_code":
 			m.code = e.LinkCode
 		case "error":
@@ -117,6 +134,17 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quitting = true
 			m.stop()
 			return m, tea.Quit
+		}
+		if m.state != nil && m.state.Phase == "downloading" {
+			switch msg.String() {
+			case "down", "j", "pgdown":
+				if m.progress != nil {
+					m.bodyScroll = min(max(0, len(m.progress.Files)-1), m.bodyScroll+1)
+				}
+			case "up", "k", "pgup":
+				m.bodyScroll = max(0, m.bodyScroll-1)
+			}
+			return m, nil
 		}
 		if m.busy {
 			return m, nil

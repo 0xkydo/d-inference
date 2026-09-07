@@ -179,6 +179,13 @@ extension ModelDownloader {
             )
         )
         let pending = zip(jobs, alreadyValid).filter { !$0.1 }.map(\.0)
+        onProgress?(ProgressEvent(file: model.id, bytesDownloaded: 0, bytesTotal: manifest.totalSizeBytes,
+            files: jobs.indices.map { i in
+                ProgressEvent.File(path: jobs[i].file.path,
+                    bytes: alreadyValid[i] ? jobs[i].file.sizeBytes : min(max(0, partBytes[i]), jobs[i].file.sizeBytes),
+                    total: jobs[i].file.sizeBytes, verified: alreadyValid[i])
+            }))
+
 
         // FINISH-ON-RESTART: a prior run already staged every shard size+SHA-valid
         // but was killed before publishing (the hidden staging dir is invisible to

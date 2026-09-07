@@ -9,6 +9,9 @@ final class TerminalDownloadProgress: @unchecked Sendable {
     private var last = Date.distantPast
     private var registered = Set<String>()
     func update(_ event: ModelDownloader.ProgressEvent) {
+        // Inventory snapshots are for the session dashboard; plain CLI rows
+        // continue to be driven by the existing individual-file callbacks.
+        guard event.files == nil else { return }
         lock.lock(); defer { lock.unlock() }
         if event.phase == .completed { renderer.finish(progress.allProgress); return }
         if event.phase == .publishing { return }

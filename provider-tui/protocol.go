@@ -39,12 +39,22 @@ type snapshot struct {
 	SelectedModelIDs []string       `json:"selectedModelIDs"`
 	Notice           *string        `json:"notice,omitempty"`
 }
+type downloadItem struct {
+	ID    string `json:"id"`
+	Bytes int64  `json:"bytes"`
+	Total *int64 `json:"total,omitempty"`
+	Stage string `json:"stage"`
+}
 type progress struct {
-	ModelID string `json:"modelID"`
-	File    string `json:"file"`
-	Bytes   int64  `json:"bytes"`
-	Total   *int64 `json:"total,omitempty"`
-	Stage   string `json:"stage"`
+	Models       []downloadItem `json:"models,omitempty"`
+	Files        []downloadItem `json:"files,omitempty"`
+	FileCount    int            `json:"fileCount,omitempty"`
+	NetworkBytes *int64         `json:"networkBytes,omitempty"`
+	ModelID      string         `json:"modelID"`
+	File         string         `json:"file"`
+	Bytes        int64          `json:"bytes"`
+	Total        *int64         `json:"total,omitempty"`
+	Stage        string         `json:"stage"`
 }
 type linkCode struct {
 	Code      string `json:"code"`
@@ -87,7 +97,14 @@ func decodeEvent(data []byte) (event, error) {
 			}
 		}
 	case "progress":
-		valid = e.Progress != nil
+		p := e.Progress
+		valid = p != nil && len(p.Models) <= 128 && len(p.Files) <= 128
+		if valid {
+			valid = validDownloadItem(downloadItem{ID: p.ModelID, Bytes: p.Bytes, Total: p.Total, Stage: p.Stage}) && p.FileCount >= 0 && (p.NetworkBytes == nil || *p.NetworkBytes >= 0)
+			for _, item := range append(append([]downloadItem{}, p.Models...), p.Files...) {
+				valid = valid && validDownloadItem(item)
+			}
+		}
 	case "link_code":
 		valid = e.LinkCode != nil
 	case "error":
@@ -97,4 +114,15 @@ func decodeEvent(data []byte) (event, error) {
 		return e, errors.New("invalid session event")
 	}
 	return e, nil
+}
+
+func validDownloadItem(item downloadItem) bool {
+	if item.Bytes < 0 || (item.Total != nil && *item.Total < 0) {
+		return false
+	}
+	switch item.Stage {
+	case "queued", "transferring", "verifying", "publishing", "completed":
+		return true
+	}
+	return false
 }

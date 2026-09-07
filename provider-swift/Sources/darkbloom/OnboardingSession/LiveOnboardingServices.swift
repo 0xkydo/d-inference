@@ -100,14 +100,18 @@ actor LiveOnboardingServices: OnboardingServices {
 
     func download(_ ids: [String], progress: @escaping @Sendable (C.Progress) -> Void) async throws {
         let downloader = ModelDownloader(catalogClient: ModelCatalogClient(coordinatorURL: coordinator), runtimeCapabilities: capabilities)
+        let tracker = OnboardingDownloadProgress(models: ids.compactMap { id in
+            entries.first { $0.id == id }.map {
+                C.DownloadItem(id: id, bytes: 0, total: nil, stage: $0.downloaded ? "completed" : "queued")
+            }
+        }, emit: progress)
         for id in ids {
             try Task.checkCancellation()
             guard let entry = entries.first(where: { $0.id == id }) else { throw C.Failure.invalidSelection }
             guard !entry.downloaded else { continue }
             do {
                 try await downloader.downloadForStorage(model: entry.catalogModel) { event in
-                    progress(C.Progress(modelID: id, file: event.file, bytes: event.bytesDownloaded,
-                                        total: event.bytesTotal, stage: event.phase.rawValue))
+                    tracker.receive(modelID: id, event: event)
                 }
             } catch is ProviderOperationLock.Failure { throw C.Failure.busy }
         }

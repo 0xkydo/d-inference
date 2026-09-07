@@ -61,12 +61,22 @@ enum OnboardingContract {
         var models: [Model] = []
         var selectedModelIDs: [String] = []
     }
+    struct DownloadItem: Codable, Sendable, Equatable {
+        let id: String
+        var bytes: Int64
+        var total: Int64?
+        var stage: String
+    }
     struct Progress: Codable, Sendable, Equatable {
         let modelID: String
         let file: String
         let bytes: Int64
         let total: Int64?
         let stage: String
+        var models: [DownloadItem]? = nil
+        var files: [DownloadItem]? = nil
+        var fileCount: Int? = nil
+        var networkBytes: Int64? = nil
     }
     struct LinkCode: Codable, Sendable, Equatable {
         let code: String

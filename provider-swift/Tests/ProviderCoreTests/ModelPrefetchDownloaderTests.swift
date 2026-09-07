@@ -4,6 +4,15 @@ import Testing
 @testable import ProviderCore
 import ProviderCoreFoundation
 
+private final class InventoryBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var inventory: [ModelDownloader.ProgressEvent.File]?
+    func receive(_ event: ModelDownloader.ProgressEvent) {
+        if let files = event.files { lock.withLock { inventory = files } }
+    }
+    var files: [ModelDownloader.ProgressEvent.File]? { lock.withLock { inventory } }
+}
+
 // MARK: - URLProtocol that serves manifest files and records requested paths
 
 private final class PrefetchURLProtocol: URLProtocol, @unchecked Sendable {
@@ -818,11 +827,20 @@ struct ModelPrefetchDownloaderTests {
         try FileManager.default.createDirectory(at: stagingDir, withIntermediateDirectories: true)
         try bigBytes.write(to: stagingDir.appendingPathComponent("model-00001-of-00001.safetensors"))
 
+        try smallBytes.prefix(6).write(to: stagingDir.appendingPathComponent("config.json.part"))
+
         let downloader = ModelDownloader(r2CDNURL: "https://cdn.example.test", urlSession: makeSession())
         let model = CatalogModel(id: modelID, s3Name: "unused", displayName: "FG", sizeGb: 0.001,
                                  r2Prefix: prefix, aggregateSHA256: aggregate)
 
-        try await downloader.download(model: model)
+        let inventory = InventoryBox()
+        try await downloader.download(model: model, onProgress: { inventory.receive($0) })
+        let initialFiles = try #require(inventory.files)
+        #expect(initialFiles.count == 2)
+        #expect(initialFiles[0].bytes == Int64(bigBytes.count))
+        #expect(initialFiles[0].verified)
+        #expect(initialFiles[1].bytes == 6)
+        #expect(!initialFiles[1].verified)
 
         let fetched = PrefetchURLProtocol.fetchedPaths()
         #expect(fetched.contains("/\(prefix)/config.json")) // missing file fetched

@@ -81,9 +81,12 @@ func (m *model) renderPage(title, body, footer string, focusLine int) string {
 	}
 	footer = rule + "\n" + footer
 	available := max(1, m.height-1-strings.Count(header, "\n")-strings.Count(footer, "\n")-2)
+	if m.state != nil && m.state.Phase == "downloading" {
+		body = m.downloadView(width, available)
+	}
 	lines := strings.Split(ansi.Wrap(body, width, ""), "\n")
 	if len(lines) > available {
-		showHint := focusLine < 0 && m.code == nil && m.progress == nil && available > 1
+		showHint := focusLine < 0 && m.code == nil && available > 1
 		visible := available
 		if showHint {
 			visible--
@@ -97,7 +100,7 @@ func (m *model) renderPage(title, body, footer string, focusLine int) string {
 				}
 			}
 			first = min(max(0, focusLine-visible/2), len(lines)-visible)
-		} else if m.code != nil || m.progress != nil {
+		} else if m.code != nil {
 			first = len(lines) - visible
 		}
 		lines = lines[first : first+visible]

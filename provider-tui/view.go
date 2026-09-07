@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+var muted = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 var bold = lipgloss.NewStyle().Bold(true)
 var success = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
 var failure = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
@@ -59,8 +60,8 @@ func (m *model) View() string {
 			footer = "Enter download selection · ↑↓ move · Space select · h additional · q quit"
 		case "downloading":
 			title = "4. Download and verify"
-			body = "Your selected models are being downloaded and verified.\n\nClosing this terminal cancels downloads. Completed and partial files are kept for resume."
-			footer = "q / Ctrl-C cancel and keep files"
+			body = ""
+			footer = "q cancel and keep files · ↑↓ browse files"
 		case "ready":
 			title = "5. Ready to start Darkbloom"
 			body = success.Render("Enrollment, account linkage, and selected downloads are complete.") + "\n\n" +
@@ -85,23 +86,6 @@ func (m *model) View() string {
 	if m.code != nil {
 		body += "\n\n" + bold.Render("Approve this Mac in your browser:") + "\n" + clean(m.code.URL) +
 			"\nCode: " + bold.Render(clean(m.code.Code)) + fmt.Sprintf("\nExpires in %d minutes. Return here after approval.", m.code.ExpiresIn/60)
-	}
-	if p := m.progress; p != nil {
-		body += "\n\n" + clean(p.ModelID) + "\n" + clean(p.File) + "\n"
-		switch p.Stage {
-		case "verifying":
-			body += "Verifying integrity…"
-		case "publishing":
-			body += "Publishing verified files…"
-		case "completed":
-			body += success.Render("Download verified and published.")
-		default:
-			body += fmt.Sprintf("%.1f MB transferred", float64(p.Bytes)/1e6)
-			if p.Total != nil && *p.Total > 0 {
-				body += fmt.Sprintf(" / %.1f MB (%d%%)", float64(*p.Total)/1e6, min(100, max(0, int(float64(p.Bytes)/float64(*p.Total)*100))))
-			}
-			body += " · verification follows transfer"
-		}
 	}
 	if m.busy && (m.state == nil || (m.state.Phase != "downloading" && m.state.Phase != "enrollment_pending")) {
 		footer = "Working… · q / Ctrl-C cancel"
