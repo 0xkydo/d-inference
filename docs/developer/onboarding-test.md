@@ -1,6 +1,6 @@
 # Test provider onboarding on a Mac
 
-> Last updated: 2026-09-07 · commit `e948063d1`
+> Last updated: 2026-09-07 · commit `25aa5b0b9`
 
 Test the real installer, device enrollment, account linkage, model downloads,
 and background startup on a physical Apple Silicon Mac. Use the reset script
@@ -11,8 +11,9 @@ to repeat first-time setup without redownloading models on every pass.
 - Use an Apple Silicon Mac with a logged-in desktop session and the supported
   [macOS/security configuration](../provider/hardware-requirements.md). The
   M3 Max with 128 GB is the physical test target.
-- Fetch the current `codex/cli-onboarding-m3-test` branch. It includes the
-  installer, production onboarding code, candidate helpers, and reset script.
+- Fetch `codex/bubbletea-stage-one` from `0xkydo/d-inference`, based on
+  `codex/cli-onboarding-m3-local`. Use the exact candidate commit when testing.
+  This branch includes the opt-in Bubble Tea frontend and the existing plain CLI.
 - A **signed, notarized candidate from this branch**, downloaded from GitHub
   Actions. A local debug build cannot substitute for the signed bundle's
   entitlement and provisioning contract.
@@ -36,21 +37,27 @@ satisfy that gate. Registering a production candidate is a separate operation.
 ### 1. Build and prepare the signed candidate
 
 ```bash
-gh workflow run release-swift.yml --repo Layr-Labs/d-inference \
-  --ref codex/cli-onboarding-m3-test \
+gh workflow run release-swift.yml --repo 0xkydo/d-inference \
+  --ref codex/bubbletea-stage-one \
   -f environment=dev -f publish_release=false
 ```
+
+The fork needs its authorized signing/provisioning/notarization secrets in the
+selected GitHub environment. Do not copy secrets from another repository or
+publish/register a release to make this UI test pass. This guide prepares
+commands; the implementation's automated tests do not dispatch this workflow.
 
 After that run succeeds, download its `darkbloom-dev-qualification-<run-id>-<attempt>`
 artifact. Substitute the actual run ID and attempt below. Use the exact checkout
 commit built by the run when preparing the artifact.
 
 ```bash
-gh run download <run-id> --repo Layr-Labs/d-inference \
+gh run download <run-id> --repo 0xkydo/d-inference \
   --name darkbloom-dev-qualification-<run-id>-<attempt> \
   --dir "$HOME/Downloads/darkbloom-cli-candidate"
 python3 scripts/onboarding/prepare-candidate.py \
-  "$HOME/Downloads/darkbloom-cli-candidate" --commit "$(git rev-parse HEAD)"
+  "$HOME/Downloads/darkbloom-cli-candidate" --commit "$(git rev-parse HEAD)" \
+  --repo 0xkydo/d-inference
 ```
 
 Preparation checks the repository, source SHA, accepted notarization record,
@@ -60,6 +67,9 @@ Developer ID. Fetching the ordinary public installer without this local metadata
 still installs the currently registered release, not the candidate.
 
 ### 2. Reset the test installation
+
+Close other onboarding sessions before resetting. The reset is for a fresh
+setup pass; skip it when checking resume or completed-install updates.
 
 ```bash
 bash scripts/onboarding/reset.sh
@@ -102,7 +112,7 @@ silently ignore them, so use the candidate CLI for a verified identity reset.
 
 ```bash
 cat scripts/install.sh | COORD_URL=https://api.darkbloom.dev bash -s -- \
-  --release-file "$HOME/Downloads/darkbloom-cli-candidate/local-release.json"
+  --tui --release-file "$HOME/Downloads/darkbloom-cli-candidate/local-release.json"
 ```
 
 `--release-file` replaces release discovery only. Bundle hashes, pinned signing
@@ -111,7 +121,8 @@ The pipe hands the real terminal to the new CLI, which continues through
 profile approval, browser account linkage, model selection, and downloads.
 
 For the first UI pass, enter `q` at **Press Enter to start Darkbloom**. The
-candidate remains installed and setup can resume with `darkbloom start`.
+candidate remains installed and setup can resume with `darkbloom start --tui`.
+The opt-in switch can be omitted to exercise the existing plain CLI.
 No verification success should be inferred from completing these screens.
 Starting the background service is a separate test once its binary identity
 is accepted by the coordinator. A not-yet-registered candidate can be rejected
@@ -120,6 +131,22 @@ or remain unverified after launch; do not report that as a passing trust test.
 Do not pipe the installer's output to `tee`: onboarding requires a terminal
 for both input and output. Use the terminal emulator's transcript feature.
 
+To resume without removing any state:
+
+```bash
+# Fresh-setup reset alternative only: bash scripts/onboarding/reset.sh --apply
+# Scope: the local install/config/identity/log paths listed above; shared models stay.
+# Do not reset when testing resume or completed-install updates.
+darkbloom start --tui
+```
+
+Closing Bubble Tea cancels and awaits its foreground download work. It retains
+completed and partial model files, and never stops an independently running
+provider. At Ready, Start is still a separate Enter action. If a provider is
+already running, explicitly starting with a new selection follows the existing
+start/reinstall sequence. Device enrollment shown by the frontend is a local
+macOS observation, not a coordinator trust verdict.
+
 ### 4. Exercise the important transitions
 
 | Pass | Action | Expected result |
@@ -127,7 +154,7 @@ for both input and output. Use the terminal emulator's transcript feature.
 | Fresh setup | Remove the profile and local state, then install | Enrollment is an explicit next step; account linkage follows confirmed enrollment; no background service starts before the final Enter |
 | Models | Select multiple models with Space, then Enter | Downloaded section appears only when populated; available models use total physical RAM with load safeguards; selected downloads reuse the verified downloader |
 | Additional models | Expand the hidden section when the live catalog contains models beyond the estimate | A fit caveat is visible; they can be downloaded, but this selection does not enable them for serving; choose at least one fitting model to finish |
-| Interruption | Quit before enrollment approval or final start; interrupt a download separately; run `darkbloom start` | The same coordinator/config and model intent resume; completed/partial downloads are reused; final Enter is still required |
+| Interruption | Quit before enrollment approval or final start; interrupt a download separately; run `darkbloom start --tui` | The same coordinator/config and model intent resume; completed/partial downloads are reused; final Enter is still required |
 | Update | Complete setup, rerun the same installer while running, then repeat after `darkbloom stop` | No enrollment/account/model prompts; running/stopped service state is preserved; the installer prints the applicable restart/start instruction |
 | Other entry points | Try `darkbloom enroll`, `darkbloom login`, `darkbloom models catalog`, `darkbloom restart`, and `darkbloom doctor` | The standalone commands remain usable; the configured coordinator is retained after setup |
 
@@ -168,8 +195,13 @@ python3 scripts/test-install-onboarding.py
 bash scripts/test-install-atomic.sh
 python3 scripts/onboarding/test-reset.py
 python3 scripts/test-release-candidate.py
+make provider-tui-test
 swift test --package-path provider-swift --filter 'Onboarding|TerminalPicker|PickerEntry|LocalDataCleanup'
 ```
+
+These fixture tests do not need a reset: they use disposable state and injected
+services. They establish workflow/terminal behavior, not signed identity,
+APNs/MDA acceptance, or successful network inference.
 
 Stage the source-matched metallib first as described in [test.md](test.md).
 These automated checks cover composition, terminal input, fit estimates,

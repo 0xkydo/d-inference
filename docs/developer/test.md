@@ -1,6 +1,6 @@
 # Test
 
-> Last updated: 2026-09-07 · commit `e948063d1`
+> Last updated: 2026-09-07 · commit `25aa5b0b9`
 
 How to run the unit tests for each component, the end-to-end suite that boots a
 real coordinator + Swift provider against ephemeral Postgres, and the docs
@@ -141,6 +141,7 @@ make benchmark-wrapper-test        # python3 -m unittest discover -s gemma_contb
 python3 scripts/test-install-onboarding.py # fake-CLI PTY handoff, updates, unattended, resume, old releases
 python3 scripts/onboarding/test-reset.py   # scoped cleanup, symlink refusal, shell backup preservation
 python3 scripts/test-release-candidate.py  # nonpublishing release gates and candidate provenance
+python3 scripts/onboarding/test-companion-package.py # isolated installer companion and signature-policy fixtures
 ./scripts/test-prod-env-refresh.sh      # deploy/gcp/prod/refresh-env.sh contract
 ./scripts/test-publish-model.sh         # scripts/publish-model.sh dry-run contract
 ```
@@ -376,6 +377,29 @@ token IDs are accepted.
 | provider never registers a model in e2e | checkpoint not in the HF cache, or not CBv2-servable (`gpt_oss`/`gemma4` families only) | download the pinned snapshot; check `DARKBLOOM_TESTBED_MODEL` |
 | nested suite step fails with "executed 0 tests" | swift-testing pass routed at an executable target / wrong filter | rebuild with `swift build --build-tests` in `libs/mlx-swift-lm`; keep suite names exact |
 | paged gate fails immediately with `DARKBLOOM_CBV2_PAGED_KV=… is set` | kill switch in your shell | `unset DARKBLOOM_CBV2_PAGED_KV` |
+
+## Onboarding session and terminal checks
+
+`make provider-tui-test` runs the Go component/race tests and
+`scripts/onboarding/test-session.py`, plus isolated installer companion checks.
+The session test builds a disposable executable
+from the actual Swift contract, workflow and pipe host with injected services,
+then drives it with an independent Python client and the real Bubble Tea UI in
+PTYs. It does not run the real installer, enrollment, login, provider Start, or
+trust operations; all fixture state is temporary. The PTY supervisor checks
+restored terminal settings before macOS revokes the slave on session exit,
+excluding only the kernel-maintained `PENDIN` bit.
+
+After building Swift tests and staging the source-matched metallib, run:
+
+```bash
+swift test --package-path provider-swift --skip-build --filter 'Onboarding|ModelPrefetchDownloaderTests|ModelStorageDownloadTests|HuggingFaceDownloadTests|WeightHasherCancellation|SelfUpdaterTests|TerminalPicker|PickerEntry|LocalDataCleanup'
+```
+
+`make provider-test` also builds the Go companion used by isolated signed-bundle
+update fixtures. Shared JSON fixtures live in
+`provider-tui/testdata/contract.json`. Human-operated signed qualification remains
+separate; follow [onboarding-test.md](onboarding-test.md).
 
 ## Related
 

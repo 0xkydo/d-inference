@@ -1,6 +1,6 @@
 # Provider CLI reference
 
-> Last updated: 2026-09-07 · commit `bbf6f83d4`
+> Last updated: 2026-09-07 · commit `25aa5b0b9`
 
 Reference for the `darkbloom` command-line tool: every subcommand and flag, the
 files and identifiers it creates, the `provider.toml` keys it reads with their
@@ -57,6 +57,7 @@ Declaration order of `Darkbloom.configuration.subcommands` (21):
 | Flag | Type | Default | Effect |
 |---|---|---|---|
 | `--coordinator-url <url>` | `String?` | `coordinator.url` (`wss://api.darkbloom.dev/ws/provider`) | Override the coordinator WebSocket URL |
+| `--tui` | flag | `false` | Opt-in Bubble Tea onboarding through the bundled companion; requires a terminal and excludes serving/model/idle-timeout overrides |
 | `--onboarding` | flag | `false` | Explicit first-time setup; terminal required. The installer passes this; ordinary interactive `start` resumes pending setup automatically |
 | `--model <id>` | `[String]`, repeatable | `[]` | Serve exactly these models; skips the picker |
 | `--all` | flag | `false` | Serve every local model the runtime supports; skips the picker |
@@ -792,3 +793,14 @@ automatic updates with `darkbloom autoupdate disable`.
 
 
 GPT-OSS benchmark and foreground execution supports the [performance controls](../reference/configuration.md#gpt-oss-performance-controls). The full-projection and kernel rollback modes support paired comparisons with identical request inputs.
+
+## Bubble Tea onboarding
+
+`darkbloom start --tui` opts in; ordinary `start` retains the plain interface.
+The installer accepts `--tui` for first-time interactive handoff, and keeps
+completed-install updates and `--install-only` out of onboarding. Missing or
+incompatible companions fail with instructions to use the plain CLI.
+See the [session contract](../architecture/components/provider-onboarding.md)
+for consent and cancellation behavior, and [Mac testing](../developer/onboarding-test.md)
+for human-operated commands. The private `onboarding-session` command requires
+pipes and is not a general management or inference API.

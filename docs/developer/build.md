@@ -1,6 +1,6 @@
 # Build
 
-> Last updated: 2026-09-07 · commit `e948063d1`
+> Last updated: 2026-09-07 · commit `25aa5b0b9`
 
 How to build every component of Darkbloom from a fresh clone: the Go
 coordinator, the Rust prompt-contract sidecar, the Swift provider CLI (with its
@@ -288,3 +288,13 @@ bundle verification. Its `start --help` capability check permits an older
 registered release to fall back to manual instructions. See
 [installation](../provider/installation.md) and the
 [script verification checks](./test.md#6-scripts-and-release-integrity).
+
+## Bubble Tea companion
+
+Use the pinned Go 1.25 toolchain from `mise.toml`, then run
+`make provider-tui-build` after building Swift. This runs
+`scripts/build-provider-tui.sh` and writes `darkbloom-tui` beside the debug CLI;
+it does not install or sign anything. `GO_BIN=/absolute/path/to/go` can select a
+worktree-local toolchain. Release CI calls the same script with the release bin
+directory, signs the companion without provider entitlements, and seals it
+inside the existing app. See [Mac onboarding testing](onboarding-test.md).

@@ -2,6 +2,9 @@
 
 ## Unreleased: CLI onboarding
 
+- Add opt-in `darkbloom start --tui` and installer `--tui` handoff using a bundled Bubble Tea companion and a narrow Swift session. Preserve explicit enrollment, account linkage and final Start actions; closing setup retains resumable downloads and leaves independently started providers running.
+- Separate download progress from terminal rendering; coordinate setup and shared model-cache writers across processes. Package and verify the companion as part of the existing signed app/update transaction.
+
 - Build signed test artifacts without publishing a release or depending on a dev coordinator; accept local release metadata through the normal verified installer for test-Mac iteration.
 
 - Continue first-time `curl | bash` installation through read-only device enrollment, account linkage, model downloads, and an explicit Enter-to-start confirmation. Resume unfinished setup with `darkbloom start`; keep updates and unattended installs out of onboarding.

@@ -1,6 +1,6 @@
 # Release a provider version
 
-> Last updated: 2026-09-07 · commit `e948063d1`
+> Last updated: 2026-09-07 · commit `25aa5b0b9`
 
 Runbook for shipping a new `darkbloom` provider CLI: bump the two version
 constants, land the changelog, push a `vX.Y.Z` tag, approve the `prod`
@@ -272,3 +272,13 @@ it** so the previous active version becomes "latest" again.
 - [`coordinator-deploy.md`](coordinator-deploy.md) — shipping the coordinator half of a version bump.
 - [`release-policy-rollout.md`](release-policy-rollout.md) — how registered releases feed the routing gate.
 - [`../reference/api-contracts.md`](../reference/api-contracts.md) — `/v1/releases/latest`, `/v1/version` shapes.
+
+## Onboarding companion in candidate bundles
+
+The release workflow also builds `darkbloom-tui` through
+`scripts/build-provider-tui.sh`, signs it as `io.darkbloom.onboarding` without
+provider keychain/APNs/debugger entitlements, and seals it inside the same app
+and notarization. The `onboarding-session-v1` capability marker and corresponding
+CLI capability require the companion to be present. Installer and updater checks
+reject incomplete candidate bundles; pre-onboarding releases remain compatible.
+There is no independent companion upload, release registration, or updater.

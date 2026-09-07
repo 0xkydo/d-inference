@@ -1,8 +1,8 @@
 # Shared Swift foundation for provider interfaces
 
-> Last updated: 2026-09-07 · commit `fdb2edd28`
+> Last updated: 2026-09-07 · commit `25aa5b0b9`
 
-Status: **Proposed** · 2026-09-07 · reviewed against the onboarding fork; runtime implementation has not started.
+Status: **In progress** · 2026-09-07 · stage-one implementation is in the onboarding fork; signed human qualification is pending. See the [implemented session](../architecture/components/provider-onboarding.md).
 
 Build real Bubble Tea onboarding with a narrow session in the existing Swift
 executable, reusing the current service implementations. A unified shared Swift

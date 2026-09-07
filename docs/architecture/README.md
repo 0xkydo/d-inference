@@ -1,6 +1,6 @@
 # Architecture — how Darkbloom works
 
-> Last updated: 2026-09-03 · commit `5d400cf75`
+> Last updated: 2026-09-07 · commit `25aa5b0b9`
 
 Explanation pages: context, mechanism, invariants, failure modes, and a code
 map for each part of the system. The code in `coordinator/`,
@@ -71,3 +71,5 @@ how-to and runbook directories listed in [`../README.md`](../README.md).
 - Decisions and plans, each with a shipped/superseded status: [`../design/README.md`](../design/README.md).
 - Dated measurements and incidents: [`../reports/README.md`](../reports/README.md).
 - Authoring rules (page skeletons, citing, stamps, checks): [`../AGENTS.md`](../AGENTS.md).
+
+- [Provider onboarding session](components/provider-onboarding.md) — opt-in Bubble Tea, Swift workflow, cancellation and packaging boundaries.
