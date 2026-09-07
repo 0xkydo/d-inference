@@ -177,7 +177,7 @@ struct Start: AsyncParsableCommand {
                 )
             } catch {
                 if guidedOnboarding {
-                    OnboardingUI.line("Setup is unfinished. Continue with: darkbloom start", style: "36")
+                    OnboardingUI.line("Setup is unfinished. Continue with: darkbloom start")
                 }
                 if error is CancellationError { throw ExitCode.failure }
                 throw error

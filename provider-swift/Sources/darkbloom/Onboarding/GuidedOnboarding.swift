@@ -11,7 +11,7 @@ enum GuidedOnboarding {
         login: () async throws -> Void
     ) async throws {
         OnboardingUI.heading("Set up Darkbloom")
-        OnboardingUI.instruction("Device enrollment → account linkage → models → start")
+        OnboardingUI.detail("Device enrollment → account linkage → models → start")
         try await enroll()
         if hasAccount() {
             OnboardingUI.line("Using your saved account link.")
@@ -25,7 +25,7 @@ enum GuidedOnboarding {
             do { try await action(); return }
             catch is CancellationError { throw CancellationError() }
             catch {
-                OnboardingUI.line("\(label): \(OnboardingUI.clean(String(describing: error)))")
+                OnboardingUI.failure("\(label): \(OnboardingUI.clean(String(describing: error)))")
                 try OnboardingUI.confirm("Press Enter to retry")
             }
         }

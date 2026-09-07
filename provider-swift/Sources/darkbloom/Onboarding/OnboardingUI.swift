@@ -41,23 +41,26 @@ enum OnboardingUI {
     static func line(_ text: String = "", style code: String? = nil) {
         for row in wrapped(text) { print("  " + (code.map { style(row, $0) } ?? row)) }
     }
-    static func heading(_ text: String) { print(); line(text, style: "1;36") }
-    static func instruction(_ text: String) { line(text, style: "36") }
+    static func heading(_ text: String) { print(); line(text, style: "1") }
+    static func instruction(_ text: String) { line(text) }
+    static func detail(_ text: String) { line(text, style: "2") }
+    static func failure(_ text: String) { line(text, style: "31") }
     static func success(_ text: String) { line(text, style: "32") }
     static func box(title: String, paragraphs: [String]) {
         let inner = min(68, width - 4)
-        print("  " + style("┌" + String(repeating: "─", count: inner + 2) + "┐", "36"))
+        print("  " + style("┌" + String(repeating: "─", count: inner + 2) + "┐", "2"))
         for (index, text) in ([title, ""] + paragraphs.flatMap({ [$0, ""] })).enumerated() {
             for row in wrapped(text, width: inner) {
-                print("  " + style("│", "36") + " " + (index == 0 ? style(row, "1;36") : row)
-                    + String(repeating: " ", count: max(0, inner - row.count)) + " " + style("│", "36"))
+                print("  " + style("│", "2") + " " + (index == 0 ? style(row, "1") : row)
+                    + String(repeating: " ", count: max(0, inner - row.count)) + " " + style("│", "2"))
             }
         }
-        print("  " + style("└" + String(repeating: "─", count: inner + 2) + "┘", "36"))
+        print("  " + style("└" + String(repeating: "─", count: inner + 2) + "┘", "2"))
     }
     static func confirm(_ prompt: String, readInput: () -> String? = { readLine() }) throws {
         print()
-        line(prompt + " (q to quit)", style: "1;36")
+        line(prompt, style: "1")
+        detail("q to quit")
         fflush(stdout)
         while let input = readInput() {
             let answer = input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()

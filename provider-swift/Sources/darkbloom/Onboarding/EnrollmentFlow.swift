@@ -37,7 +37,7 @@ enum EnrollmentFlow {
         }
         let result = try await enroll(coordinatorURL, !noOpen)
         if result.alreadyEnrolled { return }
-        OnboardingUI.line("Profile saved: \(result.profilePath.path)")
+        OnboardingUI.detail("Profile saved: \(result.profilePath.path)")
         OnboardingUI.instruction("Open the profile, then go to System Settings → General → Device Management.")
         OnboardingUI.instruction("Select the Darkbloom profile, click Install or Enroll, and follow the macOS prompts.")
         guard waitForCompletion && !noOpen else {

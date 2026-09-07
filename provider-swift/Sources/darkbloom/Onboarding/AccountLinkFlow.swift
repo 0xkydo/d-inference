@@ -21,9 +21,9 @@ enum AccountLinkFlow {
             onDisplayCode: { code, uri, expiresIn in
                 print()
                 OnboardingUI.line("Approve this Mac in your browser:")
-                OnboardingUI.line(OnboardingUI.clean(uri), style: "36")
+                OnboardingUI.line(OnboardingUI.clean(uri), style: "4")
                 OnboardingUI.line("Code: \(OnboardingUI.clean(code))", style: "1")
-                OnboardingUI.line("Waiting for approval. This code expires in \(expiresIn / 60) minutes.")
+                OnboardingUI.detail("Waiting for approval. This code expires in \(expiresIn / 60) minutes.")
                 OnboardingUI.line("Return here after approval; setup continues automatically.")
             },
             onPollTick: {})

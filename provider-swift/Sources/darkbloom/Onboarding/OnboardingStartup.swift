@@ -31,6 +31,6 @@ enum OnboardingStartup {
             }
             if let trust = state.trust { OnboardingUI.line("Device verification: " + OnboardingUI.clean(trust.reason)) }
         }
-        OnboardingUI.line("Check progress with darkbloom status. Run darkbloom doctor if it stays pending.", style: "36")
+        OnboardingUI.line("Check progress with darkbloom status. Run darkbloom doctor if it stays pending.")
     }
 }

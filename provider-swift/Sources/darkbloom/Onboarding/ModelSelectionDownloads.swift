@@ -25,9 +25,9 @@ extension Start {
                 if isManifest { onProgress = nil }
                 else { onProgress = { event in legacyProgress.update(event) } }
                 try await downloader.downloadForStorage(model: entry.catalogModel, onProgress: onProgress)
-                OnboardingUI.line("Downloaded \(OnboardingUI.clean(entry.displayName)).")
+                OnboardingUI.success("Downloaded \(OnboardingUI.clean(entry.displayName)).")
             } catch {
-                OnboardingUI.line("Download interrupted: \(OnboardingUI.clean(String(describing: error)))")
+                OnboardingUI.failure("Download interrupted: \(OnboardingUI.clean(String(describing: error)))")
                 OnboardingUI.line("Run darkbloom start to retry. Completed files are kept and partial downloads resume.")
                 throw error
             }
