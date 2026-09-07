@@ -2,7 +2,7 @@
 
 ## Unreleased: CLI onboarding
 
-- Replace the jumping latest-file download display with a persistent overall/model/file progress dashboard, speed, ETA and elapsed time. Preserve concurrent file updates and resume baselines, allow browsing during transfer, and distinguish downloading from integrity verification.
+- Replace the jumping latest-file download display with a prominent ETA, overall progress and a clear queue of selected models. Keep file bars, speed and elapsed time behind a detail toggle. Preserve concurrent file updates and resume baselines, allow browsing during transfer, and distinguish downloading from integrity verification.
 
 - Show a persistent onboarding header, five-step progress and a prominent next action. Detect macOS enrollment approval automatically; browser login still requires Enter. Add `reset.sh --all` for full local state, shared model-cache and downloaded-installer cleanup.
 - Add opt-in `darkbloom start --tui` and installer `--tui` handoff using a bundled Bubble Tea companion and a narrow Swift session. Preserve explicit enrollment, account linkage and final Start actions; closing setup retains resumable downloads and leaves independently started providers running.

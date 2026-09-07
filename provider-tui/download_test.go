@@ -22,7 +22,7 @@ func TestDownloadDashboardBoundsAndScroll(t *testing.T) {
 	for _, size := range [][2]int{{88, 28}, {42, 16}, {32, 14}, {120, 40}} {
 		m.width, m.height = size[0], size[1]
 		view := m.View()
-		if !strings.Contains(view, "Overall transfer") || !strings.Contains(view, "q cancel") {
+		if !strings.Contains(view, "Download ETA") || !strings.Contains(view, "q cancel") {
 			t.Fatalf("missing pinned controls at %v: %s", size, view)
 		}
 		lines := strings.Split(view, "\n")
@@ -36,6 +36,10 @@ func TestDownloadDashboardBoundsAndScroll(t *testing.T) {
 		}
 	}
 	m.width, m.height = 88, 28
+	if !strings.Contains(m.View(), "First model") || !strings.Contains(m.View(), "Next model") || !strings.Contains(m.View(), "Queued") || strings.Contains(m.View(), "weights-1") || strings.Contains(m.View(), "Saved bytes included") {
+		t.Fatal("default view should show all models without file details")
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
 	if !strings.Contains(m.View(), "weights-1") {
 		t.Fatal("first file hidden")
 	}
@@ -71,15 +75,43 @@ func TestDownloadRateExcludesSavedBytesAndExpires(t *testing.T) {
 	}
 	m := downloadModel()
 	m.downloadClock = c
-	if !strings.Contains(m.View(), "ETA ~") {
+	if !strings.Contains(m.View(), "Download ETA · ~") {
 		t.Fatal("missing ETA")
 	}
 	m.progress.Stage = "verifying"
-	if !strings.Contains(m.View(), "Verification time varies") || strings.Contains(m.View(), "ETA ~") {
+	if !strings.Contains(m.View(), "Checking your downloads…") || strings.Contains(m.View(), "Download ETA · ~") {
 		t.Fatal("transfer ETA promises verification completion")
 	}
+	m.downloadDetails = true
 	m.progress.Files[0].ID = "bad\x1b]52;clipboard\x07"
 	if strings.Contains(m.View(), "\x1b]52") {
 		t.Fatal("filename terminal injection")
+	}
+}
+
+func TestMultipleDownloadModelStates(t *testing.T) {
+	m := downloadModel()
+	m.progress.Models[0].Stage = "completed"
+	m.progress.ModelID = "two"
+	m.progress.Models[1] = downloadItem{ID: "two", Bytes: 1e9, Total: int64ptr(2e9), Stage: "transferring"}
+	rows, bytes, total, complete := m.downloadModels()
+	if len(rows) != 2 || bytes != 5e9 || total != 6e9 || complete != 1 {
+		t.Fatalf("incorrect aggregate: %v %d %d %d", rows, bytes, total, complete)
+	}
+	view := m.View()
+	if !strings.Contains(view, "First model · ✓ Ready") || !strings.Contains(view, "Next model · Downloading") {
+		t.Fatal(view)
+	}
+	for i := 0; i < 10; i++ {
+		m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	if m.bodyScroll != 0 {
+		t.Fatal("model scrolling overshot end")
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	if m.downloadDetails || m.bodyScroll != 0 {
+		t.Fatal("detail toggle did not restore overview")
 	}
 }

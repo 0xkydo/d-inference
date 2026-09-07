@@ -47,7 +47,10 @@ actor FixtureServices: OnboardingServices {
                 for step in 0..<5 {
                     let bytes = Int64(1_000_000_000 + step * 200_000_000)
                     var frame = C.Progress(modelID: id, file: String(repeating: "w", count: Int(ProcessInfo.processInfo.environment["FIXTURE_PROGRESS_BYTES"] ?? "19") ?? 19), bytes: bytes, total: 4_000_000_000, stage: "transferring")
-                    frame.models = [C.DownloadItem(id: id, bytes: bytes, total: 4_000_000_000, stage: "transferring")]
+                    frame.models = ids.map { selected in
+                        C.DownloadItem(id: selected, bytes: selected == id ? bytes : (has(selected+"-complete") ? 4_000_000_000 : 0),
+                            total: 4_000_000_000, stage: selected == id ? "transferring" : (has(selected+"-complete") ? "completed" : "queued"))
+                    }
                     frame.files = [
                         C.DownloadItem(id: "model-00001-of-00002.safetensors", bytes: bytes / 2, total: 2_000_000_000, stage: "transferring"),
                         C.DownloadItem(id: "model-00002-of-00002.safetensors", bytes: bytes / 2, total: 2_000_000_000, stage: "transferring"),

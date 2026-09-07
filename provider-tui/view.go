@@ -61,7 +61,10 @@ func (m *model) View() string {
 		case "downloading":
 			title = "4. Download and verify"
 			body = ""
-			footer = "q cancel and keep files · ↑↓ browse files"
+			footer = "q cancel and keep files · d file details · ↑↓ browse models"
+			if m.downloadDetails {
+				footer = "q cancel and keep files · d back to models · ↑↓ browse files"
+			}
 		case "ready":
 			title = "5. Ready to start Darkbloom"
 			body = success.Render("Enrollment, account linkage, and selected downloads are complete.") + "\n\n" +

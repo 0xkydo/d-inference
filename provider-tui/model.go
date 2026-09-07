@@ -15,21 +15,22 @@ func checkEnrollmentLater(revision int) tea.Cmd {
 }
 
 type model struct {
-	state          *snapshot
-	selected       map[string]bool
-	cursor         int
-	bodyScroll     int
-	expanded       bool
-	width, height  int
-	busy, quitting bool
-	nextID         int
-	problem        string
-	progress       *progress
-	downloadClock  downloadClock
-	code           *linkCode
-	send           func(command) error
-	stop           func()
-	receive        func() backendMessage
+	state           *snapshot
+	selected        map[string]bool
+	cursor          int
+	bodyScroll      int
+	expanded        bool
+	width, height   int
+	busy, quitting  bool
+	nextID          int
+	problem         string
+	progress        *progress
+	downloadClock   downloadClock
+	downloadDetails bool
+	code            *linkCode
+	send            func(command) error
+	stop            func()
+	receive         func() backendMessage
 }
 
 func newModel(send func(command) error, receive func() backendMessage) *model {
@@ -113,7 +114,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor = min(m.cursor, max(0, len(m.visible())-1))
 			}
 		case "progress":
-			if m.progress == nil || m.progress.ModelID != e.Progress.ModelID {
+			if m.downloadDetails && (m.progress == nil || m.progress.ModelID != e.Progress.ModelID) {
 				m.bodyScroll = 0
 			}
 			m.progress = e.Progress
@@ -137,10 +138,15 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.state != nil && m.state.Phase == "downloading" {
 			switch msg.String() {
+			case "d":
+				m.downloadDetails = !m.downloadDetails
+				m.bodyScroll = 0
 			case "down", "j", "pgdown":
-				if m.progress != nil {
-					m.bodyScroll = min(max(0, len(m.progress.Files)-1), m.bodyScroll+1)
+				count := len(m.state.SelectedModelIDs)
+				if m.downloadDetails && m.progress != nil {
+					count = len(m.progress.Files)
 				}
+				m.bodyScroll = min(max(0, count-1), m.bodyScroll+1)
 			case "up", "k", "pgup":
 				m.bodyScroll = max(0, m.bodyScroll-1)
 			}
