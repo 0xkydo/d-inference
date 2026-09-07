@@ -19,12 +19,8 @@ extension Start {
             do {
                 // Explicit storage intent only. The normal downloader and all
                 // serving gates continue enforcing runtime capabilities.
-                let legacyProgress = LegacyModelDownloadProgress()
-                let isManifest = entry.catalogModel.r2Prefix != nil && entry.catalogModel.aggregateSHA256 != nil
-                let onProgress: (@Sendable (ModelDownloader.ProgressEvent) -> Void)?
-                if isManifest { onProgress = nil }
-                else { onProgress = { event in legacyProgress.update(event) } }
-                try await downloader.downloadForStorage(model: entry.catalogModel, onProgress: onProgress)
+                let progress = TerminalDownloadProgress()
+                try await downloader.downloadForStorage(model: entry.catalogModel, onProgress: { progress.update($0) })
                 OnboardingUI.success("Downloaded \(OnboardingUI.clean(entry.displayName)).")
             } catch {
                 OnboardingUI.failure("Download interrupted: \(OnboardingUI.clean(String(describing: error)))")
@@ -32,22 +28,5 @@ extension Start {
                 throw error
             }
         }
-    }
-}
-
-/// Manifest downloads already own their progress UI. Legacy catalog entries
-/// report byte callbacks, throttled here so long downloads also show activity.
-private final class LegacyModelDownloadProgress: @unchecked Sendable {
-    private let lock = NSLock()
-    private var lastUpdate = Date.distantPast
-    private var lastFile = ""
-    func update(_ progress: ModelDownloader.ProgressEvent) {
-        lock.lock()
-        defer { lock.unlock() }
-        let now = Date()
-        guard progress.file != lastFile || now.timeIntervalSince(lastUpdate) >= 2 else { return }
-        lastFile = progress.file
-        lastUpdate = now
-        OnboardingUI.line("\(OnboardingUI.clean(progress.file)) · \(String(format: "%.1f MB", Double(progress.bytesDownloaded) / 1_000_000)) downloaded")
     }
 }

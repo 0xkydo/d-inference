@@ -109,13 +109,13 @@ public struct WeightHasher: Sendable {
     /// Hash files in sorted order of the caller-supplied sort key, combining per-file
     /// digests into a final hash. Used by both the legacy attestation path (sort key =
     /// absolute path) and the manifest builder (sort key = relative POSIX path).
-    public static func hashFilesWithRelativeKey(_ files: [(file: URL, sortKey: String)]) -> String? {
+    public static func hashFilesWithRelativeKey(_ files: [(file: URL, sortKey: String)], isCancelled: () -> Bool = { false }) -> String? {
         let sorted = files.sorted { $0.sortKey < $1.sortKey }
 
         // Combine per-file hashes in sorted order.
         var finalHasher = SHA256()
         for entry in sorted {
-            guard let fileDigest = hashSingleFile(at: entry.file) else {
+            guard let fileDigest = hashSingleFile(at: entry.file, isCancelled: isCancelled) else {
                 return nil
             }
             // SHA256Digest doesn't conform to DataProtocol; use withUnsafeBytes
@@ -135,13 +135,15 @@ public struct WeightHasher: Sendable {
     /// download temp locations — they retain NSFileProtectionComplete extended
     /// attributes that block raw POSIX open() but are handled transparently by
     /// Foundation URL/file coordination.
-    public static func hashSingleFile(at url: URL) -> SHA256Digest? {
-        if let digest = hashSingleFileViaHandle(at: url) {
+    public static func hashSingleFile(at url: URL, isCancelled: () -> Bool = { false }) -> SHA256Digest? {
+        if let digest = hashSingleFileViaHandle(at: url, isCancelled: isCancelled) {
             return digest
         }
-        if let digest = hashSingleFileViaInputStream(at: url) {
+        guard !isCancelled() else { return nil }
+        if let digest = hashSingleFileViaInputStream(at: url, isCancelled: isCancelled) {
             return digest
         }
+        guard !isCancelled() else { return nil }
         // Last-resort compatibility fallback: NSData can handle file-protection
         // cases that raw POSIX open() rejects. Keep it to small files so a large
         // shard cannot be copied into memory after both streaming paths fail.
@@ -183,7 +185,7 @@ public struct WeightHasher: Sendable {
         #endif
     }
 
-    private static func hashSingleFileViaHandle(at url: URL) -> SHA256Digest? {
+    private static func hashSingleFileViaHandle(at url: URL, isCancelled: () -> Bool) -> SHA256Digest? {
         guard let handle = try? FileHandle(forReadingFrom: url) else {
             return nil
         }
@@ -192,6 +194,7 @@ public struct WeightHasher: Sendable {
         var hasher = SHA256()
 
         while true {
+            guard !isCancelled() else { return nil }
             guard let chunk = withAutoreleasePool({ try? handle.read(upToCount: bufferSize) }) else {
                 return nil
             }
@@ -204,7 +207,7 @@ public struct WeightHasher: Sendable {
         return hasher.finalize()
     }
 
-    private static func hashSingleFileViaInputStream(at url: URL) -> SHA256Digest? {
+    private static func hashSingleFileViaInputStream(at url: URL, isCancelled: () -> Bool) -> SHA256Digest? {
         guard isStreamingBufferSizeAllowed(bufferSize) else {
             return nil
         }
@@ -218,6 +221,7 @@ public struct WeightHasher: Sendable {
         var buffer = [UInt8](repeating: 0, count: bufferSize)
 
         while true {
+            guard !isCancelled() else { return nil }
             let bytesRead = buffer.withUnsafeMutableBufferPointer { ptr -> Int in
                 guard let baseAddress = ptr.baseAddress else { return -1 }
                 return stream.read(baseAddress, maxLength: bufferSize)

@@ -49,6 +49,7 @@ struct Darkbloom: AsyncParsableCommand {
             Fan.self,
             Watchdog.self,
             RuntimeSmoke.self,
+            OnboardingSessionCommand.self,
         ]
     )
 

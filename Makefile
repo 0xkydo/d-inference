@@ -53,6 +53,7 @@ provider-build: ## Build the Swift provider CLI with its source-matched metallib
 
 provider-test: ## Build and run Swift provider tests with source-matched metallibs
 	cd provider-swift && swift build --build-tests
+	./scripts/build-provider-tui.sh
 	@set -eu; \
 	    bin_path="$$(cd provider-swift && swift build --show-bin-path)"; \
 	    ./scripts/fetch-metallib.sh "$$bin_path"; \
@@ -128,3 +129,12 @@ all: test build ## Test + build everything
 clean: ## Remove built artifacts
 	rm -f coordinator/coordinator coordinator/coordinator-linux
 	rm -rf coordinator/promptsidecar/target provider-swift/.build console-ui/.next console-ui/node_modules
+
+.PHONY: provider-tui-build provider-tui-test
+provider-tui-build: ## Build Bubble Tea beside the debug Swift CLI (no installation)
+	./scripts/build-provider-tui.sh
+
+provider-tui-test: ## Test Go components and disposable Swift-session PTYs
+	cd provider-tui && go test -race ./...
+	python3 scripts/onboarding/test-session.py
+	python3 scripts/onboarding/test-companion-package.py

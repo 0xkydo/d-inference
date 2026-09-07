@@ -12,7 +12,7 @@ extension ModelDownloader {
               let onDisk = attrs[.size] as? Int64, onDisk == size else {
             return false
         }
-        guard let digest = WeightHasher.hashSingleFile(at: url) else { return false }
+        guard let digest = WeightHasher.hashSingleFile(at: url, isCancelled: { Task.isCancelled }) else { return false }
         let hex = digest.map { String(format: "%02x", $0) }.joined()
         return hex == sha256.lowercased()
     }
@@ -69,6 +69,7 @@ extension ModelDownloader {
 
         // 2. tokenizer files. Best-effort.
         for name in ["tokenizer.json", "tokenizer_config.json", "special_tokens_map.json", "tokenizer.model", "chat_template.jinja"] {
+            try Task.checkCancellation()
             _ = try? await downloadFile(
                 from: "\(base)/\(name)",
                 to: cacheDir.appendingPathComponent(name),
@@ -110,7 +111,9 @@ extension ModelDownloader {
             }
         }
 
+        try Task.checkCancellation()
         try writeMainRef(for: model.id)
+        onProgress?(ProgressEvent(file: model.id, bytesDownloaded: 0, bytesTotal: nil, phase: .completed))
     }
 
     internal func downloadManifestModel(
@@ -159,7 +162,11 @@ extension ModelDownloader {
 
         // Resume: skip files already staged + valid; only the not-yet-valid files
         // are enqueued below.
-        let alreadyValid = jobs.map { Self.fileMatches($0.destination, size: $0.file.sizeBytes, sha256: $0.file.sha256) }
+        onProgress?(ProgressEvent(file: model.id, bytesDownloaded: 0, bytesTotal: manifest.totalSizeBytes, phase: .verifying))
+        let alreadyValid = try jobs.map {
+            try Task.checkCancellation()
+            return Self.fileMatches($0.destination, size: $0.file.sizeBytes, sha256: $0.file.sha256)
+        }
         // The foreground per-file downloader now byte-resumes (streams to a stable
         // `.part` and appends via HTTP `Range`), so credit any bytes already saved
         // in each `.part`: a near-complete resume of a big shard must not be charged
@@ -178,30 +185,9 @@ extension ModelDownloader {
         // the scanner, so the picker showed "not downloaded"). Don't re-download —
         // verify the aggregate and publish.
         if pending.isEmpty {
-            try finalizeStagedManifest(model: model, manifest: manifest, jobs: jobs, stagingDir: stagingDir, cacheDir: cacheDir)
-            onProgress?(ProgressEvent(file: model.id, bytesDownloaded: manifest.totalSizeBytes, bytesTotal: manifest.totalSizeBytes))
+            try finalizeStagedManifest(model: model, manifest: manifest, jobs: jobs, stagingDir: stagingDir, cacheDir: cacheDir, onProgress: onProgress)
+            onProgress?(ProgressEvent(file: model.id, bytesDownloaded: manifest.totalSizeBytes, bytesTotal: manifest.totalSizeBytes, phase: .completed))
             return
-        }
-
-        // Live per-shard progress. Seed each pending file's bar with any bytes
-        // already saved in its `.part` (a resumed prefix) so the display reflects
-        // real on-disk progress instead of restarting the bar at 0%.
-        let progress = ManifestDownloadProgress()
-        for job in pending {
-            progress.register(
-                label: job.file.path,
-                expectedBytes: job.file.sizeBytes,
-                initialBytes: fileSize(job.destination.appendingPathExtension("part"))
-            )
-        }
-
-        let renderer = ProgressRenderer()
-        // Start the render loop as a detached task.
-        let renderTask = Task.detached { [renderer, progress] in
-            while !Task.isCancelled {
-                renderer.render(progress.allProgress)
-                try? await Task.sleep(nanoseconds: 250_000_000)  // 250ms
-            }
         }
 
         do {
@@ -214,9 +200,9 @@ extension ModelDownloader {
                     next += 1
                     group.addTask {
                         try await self.downloadManifestFileWithResume(job, huggingFaceArtifact: model.huggingFaceArtifact, onChunk: { bytes in
-                            progress.update(label: job.file.path, downloadedBytes: bytes)
+                            onProgress?(ProgressEvent(file: job.file.path, bytesDownloaded: bytes, bytesTotal: job.file.sizeBytes))
                         })
-                        progress.complete(label: job.file.path)
+                        onProgress?(ProgressEvent(file: job.file.path, bytesDownloaded: job.file.sizeBytes, bytesTotal: job.file.sizeBytes, phase: .verifying))
                     }
                 }
 
@@ -226,21 +212,15 @@ extension ModelDownloader {
                         next += 1
                         group.addTask {
                             try await self.downloadManifestFileWithResume(job, huggingFaceArtifact: model.huggingFaceArtifact, onChunk: { bytes in
-                                progress.update(label: job.file.path, downloadedBytes: bytes)
+                                onProgress?(ProgressEvent(file: job.file.path, bytesDownloaded: bytes, bytesTotal: job.file.sizeBytes))
                             })
-                            progress.complete(label: job.file.path)
+                            onProgress?(ProgressEvent(file: job.file.path, bytesDownloaded: job.file.sizeBytes, bytesTotal: job.file.sizeBytes, phase: .verifying))
                         }
                     }
                 }
             }
 
-            // Stop the render loop and print the final summary.
-            renderTask.cancel()
-            renderer.finish(progress.allProgress)
         } catch {
-            renderTask.cancel()
-            // One last render so the user sees where things stopped.
-            renderer.render(progress.allProgress)
             // Keep staging ONLY if it holds resumable content (a completed file or
             // a `.part` prefix); otherwise remove the empty husk so a first-file
             // failure doesn't leave a stray staging dir behind. (A promoted file is
@@ -255,8 +235,8 @@ extension ModelDownloader {
             throw error
         }
 
-        try finalizeStagedManifest(model: model, manifest: manifest, jobs: jobs, stagingDir: stagingDir, cacheDir: cacheDir)
-        onProgress?(ProgressEvent(file: model.id, bytesDownloaded: manifest.totalSizeBytes, bytesTotal: manifest.totalSizeBytes))
+        try finalizeStagedManifest(model: model, manifest: manifest, jobs: jobs, stagingDir: stagingDir, cacheDir: cacheDir, onProgress: onProgress)
+        onProgress?(ProgressEvent(file: model.id, bytesDownloaded: manifest.totalSizeBytes, bytesTotal: manifest.totalSizeBytes, phase: .completed))
     }
 
     /// Verify the aggregate hash over the staged files, then publish the snapshot
@@ -273,13 +253,19 @@ extension ModelDownloader {
         manifest: ModelManifest,
         jobs: [(file: ManifestFile, destination: URL, url: String)],
         stagingDir: URL,
-        cacheDir: URL
+        cacheDir: URL,
+        onProgress: (@Sendable (ProgressEvent) -> Void)?
     ) throws {
-        let aggregate = WeightHasher.hashFilesWithRelativeKey(jobs.map { (file: $0.destination, sortKey: $0.file.path) })
+        try Task.checkCancellation()
+        onProgress?(ProgressEvent(file: model.id, bytesDownloaded: manifest.totalSizeBytes, bytesTotal: manifest.totalSizeBytes, phase: .verifying))
+        let aggregate = WeightHasher.hashFilesWithRelativeKey(jobs.map { (file: $0.destination, sortKey: $0.file.path) }, isCancelled: { Task.isCancelled })
+        try Task.checkCancellation()
         guard aggregate == manifest.aggregateSHA256 else {
             try? FileManager.default.removeItem(at: stagingDir)
             throw ModelCatalogError.downloadFailed("aggregate hash mismatch for \(model.id)")
         }
+        try Task.checkCancellation()
+        onProgress?(ProgressEvent(file: model.id, bytesDownloaded: manifest.totalSizeBytes, bytesTotal: manifest.totalSizeBytes, phase: .publishing))
         try Self.publishStagedSnapshot(stagingDir, to: cacheDir)
         try writeMainRef(for: model.id)
         // Staging was consumed by publishStagedSnapshot; best-effort husk cleanup.

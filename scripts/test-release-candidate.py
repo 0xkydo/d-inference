@@ -115,6 +115,18 @@ class ReleaseCandidateTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 prepare_module.prepare(root, "c" * 40)
 
+    def test_fork_candidate_requires_explicit_repository_pin(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _, env, notary = self.fixture(root)
+            env.update(GITHUB_SHA="c" * 40, GITHUB_REPOSITORY="0xkydo/d-inference")
+            record = manifest.qualification_manifest(root, notary, env)
+            (root / "darkbloom-qualification-manifest.json").write_text(json.dumps(record))
+            with self.assertRaises(ValueError):
+                prepare_module.prepare(root, "c" * 40)
+            result = prepare_module.prepare(root, "c" * 40, "0xkydo/d-inference")
+            self.assertEqual(result["binary_hash"], env["BINARY_HASH"])
+
     def test_local_metadata_avoids_release_server_and_preserves_install_only(self):
         installer = (ROOT / "scripts/install.sh").read_text()
         functions = installer[installer.index("parse_install_options() {"):installer.index("verify_file_hash() {")]

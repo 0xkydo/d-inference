@@ -120,11 +120,12 @@ public struct EnrollmentService: Sendable {
             throw EnrollmentError.profileWriteFailed(error.localizedDescription)
         }
 
+        try Task.checkCancellation()
         if openSystemSettings {
             // Step 1: register with System Settings by opening the .mobileconfig.
             _ = try? runOpen(arguments: [profilePath.path])
             // Tiny pause so the profile registers before we open the pane.
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            try await Task.sleep(nanoseconds: 1_000_000_000)
             // Step 2: open System Settings → Profiles directly.
             _ = try? runOpen(arguments: [
                 "x-apple.systempreferences:com.apple.Profiles-Settings.extension"

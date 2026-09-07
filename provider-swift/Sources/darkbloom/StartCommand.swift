@@ -17,6 +17,9 @@ struct Start: AsyncParsableCommand {
     @Flag(help: "Continue first-time enrollment, account linkage, and model selection. Requires a terminal.")
     var onboarding = false
 
+    @Flag(help: "Use opt-in Bubble Tea onboarding (requires the bundled companion and a terminal).")
+    var tui = false
+
     var guidedOnboarding = false
 
     @OptionGroup var configOptions: ConfigOptions
@@ -66,6 +69,12 @@ struct Start: AsyncParsableCommand {
     }
 
     mutating func run() async throws {
+        if tui {
+            guard !foreground, !local, !localEndpoint, !all, model.isEmpty, idleTimeout == nil else {
+                throw ValidationError("--tui requires onboarding without serving-mode, model, or idle-timeout overrides.")
+            }
+            try BubbleTeaLauncher.launch(config: configOptions.config, coordinatorURL: coordinatorURL)
+        }
         Darkbloom.ensureLogging()
         if !foreground {
             printTermsNotice()

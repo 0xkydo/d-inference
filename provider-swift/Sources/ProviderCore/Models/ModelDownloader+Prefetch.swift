@@ -36,6 +36,9 @@ extension ModelDownloader {
         manifest: ModelManifest,
         onByteProgress: (@Sendable (Int64, Int64) -> Void)? = nil
     ) async throws {
+        let lease = try ProviderOperationLock.model(model.id)
+        defer { withExtendedLifetime(lease) {} }
+        try Task.checkCancellation()
         let eligibility = ModelRuntimeRequirements.evaluate(
             modelID: model.id,
             catalogRequirements: model.requiredProviderCapabilities,
@@ -137,7 +140,8 @@ extension ModelDownloader {
         // and network/transport failures throw BEFORE this point and deliberately
         // leave staging intact so they can resume — only the aggregate-mismatch
         // path clears it.)
-        let aggregate = WeightHasher.hashFilesWithRelativeKey(jobs.map { (file: $0.destination, sortKey: $0.file.path) })
+        let aggregate = WeightHasher.hashFilesWithRelativeKey(jobs.map { (file: $0.destination, sortKey: $0.file.path) }, isCancelled: { Task.isCancelled })
+        try Task.checkCancellation()
         guard aggregate == manifest.aggregateSHA256 else {
             try? FileManager.default.removeItem(at: stagingDir)
             throw ModelCatalogError.downloadFailed("aggregate hash mismatch for \(model.id)")

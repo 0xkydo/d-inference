@@ -17,7 +17,7 @@ FUNCTION = SOURCE[SOURCE.index('finish_installation() {'):SOURCE.index('if [ "${
 
 
 class InstallerHandoffTests(unittest.TestCase):
-    def run_handoff(self, *, terminal=False, pending=True, install_only=False, supported=True, fail=False):
+    def run_handoff(self, *, terminal=False, pending=True, install_only=False, supported=True, fail=False, tui=False):
         with tempfile.TemporaryDirectory(prefix='darkbloom-handoff-') as root:
             directory = Path(root)
             cli = directory / 'darkbloom'
@@ -27,7 +27,7 @@ class InstallerHandoffTests(unittest.TestCase):
                 marker.touch()
             cli.write_text('#!/bin/bash\n' +
                 'if [ "${2:-}" = "--help" ]; then\n' +
-                ('  echo "--onboarding"\n' if supported else '  echo "legacy CLI"\n') +
+                ('  echo "--onboarding --tui"\n' if supported else '  echo "legacy CLI"\n') +
                 '  exit 0\nfi\n' +
                 'printf "%s\\n" "$*" >> ' + shlex.quote(str(log)) + '\n' +
                 '[ -t 0 ] || exit 95\n' +
@@ -37,6 +37,7 @@ class InstallerHandoffTests(unittest.TestCase):
             script = 'set -eu\n' + FUNCTION
             for key, value in dict(BIN_DIR=root, ONBOARDING_PENDING=str(marker),
                                    COORD_URL='https://example.test',
+                                   ONBOARDING_TUI='true' if tui else 'false',
                                    INSTALL_ONLY='true' if install_only else 'false').items():
                 script += key + '=' + shlex.quote(value) + '\n'
             script += 'finish_installation\n'
@@ -85,6 +86,11 @@ class InstallerHandoffTests(unittest.TestCase):
         self.assertEqual(code, 0, output)
         self.assertIn('fake CLI awaiting Enter', output)
         self.assertEqual(calls.strip(), 'start --onboarding --coordinator-url https://example.test')
+
+    def test_opt_in_tui_handoff(self):
+        output, code, calls, _ = self.run_handoff(terminal=True, tui=True)
+        self.assertEqual(code, 0, output)
+        self.assertEqual(calls.strip(), 'start --onboarding --tui --coordinator-url https://example.test')
 
     def test_updates_and_install_only_never_start_onboarding(self):
         for arguments in [dict(terminal=True, pending=False), dict(terminal=True, install_only=True)]:

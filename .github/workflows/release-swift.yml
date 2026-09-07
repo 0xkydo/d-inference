@@ -316,6 +316,9 @@ jobs:
           REPORTED=$("$BIN_DIR/$CLI_NAME" --version)
           ../scripts/check-release-version.sh "$VERSION" "$REPORTED"
 
+      - name: Build Bubble Tea companion
+        run: scripts/build-provider-tui.sh "$BIN_DIR"
+
       - name: Save SwiftPM cache
         uses: actions/cache/save@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
         if: always()
@@ -436,6 +439,8 @@ jobs:
 
           cp "$BIN_DIR/$CLI_NAME" "$APP/Contents/MacOS/"
           cp "$BIN_DIR/$ENCLAVE_NAME" "$APP/Contents/MacOS/"
+          install -m 0755 "$BIN_DIR/darkbloom-tui" "$APP/Contents/MacOS/darkbloom-tui"
+          printf '1\n' > "$APP/Contents/Resources/darkbloom-runtime-capabilities/onboarding-session-v1"
           cp "${{ steps.metallib.outputs.metallib }}" "$APP/Contents/MacOS/mlx.metallib"
           install -m 0755 \
             "$BIN_DIR/$FAN_HELPER_NAME" \
@@ -513,6 +518,19 @@ jobs:
           codesign --force --options runtime --timestamp \
             --keychain "$KEYCHAIN_PATH" \
             --sign "$DEVELOPER_ID" "$APP/Contents/MacOS/mlx.metallib"
+          # UI helper: separately signed, no provider keychain/APNs/debug entitlements.
+          codesign --force --options runtime --timestamp \
+            --identifier io.darkbloom.onboarding \
+            --keychain "$KEYCHAIN_PATH" --sign "$DEVELOPER_ID" \
+            "$APP/Contents/MacOS/darkbloom-tui"
+          codesign --verify --strict --verbose=2 \
+            '-R=anchor apple generic and identifier "io.darkbloom.onboarding" and certificate leaf[subject.OU] = "SLDQ2GJ6TL"' \
+            "$APP/Contents/MacOS/darkbloom-tui"
+          TUI_ENTITLEMENTS=$(codesign -d --entitlements - --xml "$APP/Contents/MacOS/darkbloom-tui" 2>/dev/null || true)
+          if printf '%s' "$TUI_ENTITLEMENTS" | grep -Eq 'keychain-access-groups|aps-environment|get-task-allow|application-identifier'; then
+            echo "::error::Go companion must not carry provider or debugger entitlements"
+            exit 1
+          fi
           # darkbloom-enclave only uses ephemeral SE keys (no keychain).
           # It gets its own entitlements without keychain-access-groups and
           # application-identifier so AMFI doesn't require a provisioning
@@ -673,6 +691,8 @@ jobs:
           tar tzf /tmp/darkbloom-bundle-macos-arm64.tar.gz | sort | tee /tmp/darkbloom-bundle-files.txt
           grep -qx './bin/darkbloom' /tmp/darkbloom-bundle-files.txt
           grep -qx './bin/darkbloom-enclave' /tmp/darkbloom-bundle-files.txt
+          grep -qx './Darkbloom.app/Contents/MacOS/darkbloom-tui' /tmp/darkbloom-bundle-files.txt
+          grep -qx './Darkbloom.app/Contents/Resources/darkbloom-runtime-capabilities/onboarding-session-v1' /tmp/darkbloom-bundle-files.txt
           grep -qx './bin/mlx.metallib' /tmp/darkbloom-bundle-files.txt
           if grep -qx './bin/darkbloom-fan-helper' /tmp/darkbloom-bundle-files.txt; then
             echo "::error::fan helper must not be present in the flat verifier layout"

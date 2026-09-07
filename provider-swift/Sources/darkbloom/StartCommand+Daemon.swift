@@ -49,7 +49,7 @@ extension Start {
                 state.requiresAccountLink != true && AuthTokenStore.load() != nil
             }, login: {
                 try await GuidedOnboarding.retry("Account linkage could not finish") {
-                    try await AccountLinkFlow.run(coordinatorURL: coordinatorURL)
+                    try await AccountLinkFlow.run(coordinatorURL: coordinatorURL, relink: state.requiresAccountLink == true)
                     state.requiresAccountLink = false
                     try state.save()
                 }
@@ -104,37 +104,12 @@ extension Start {
             try OnboardingUI.confirm("Press Enter to start Darkbloom")
         }
         let launchedAt = Date().timeIntervalSince1970
-        try LaunchAgent.installAndStart(
-            coordinatorURL: coordinatorURL,
-            models: selectedModelIDs,
-            configPath: configPath,
-            localEndpoint: LaunchAgent.LocalEndpointOptions(
-                enabled: localEndpoint, port: port, bind: bind, noAuth: noAuth
-            )
-        )
-
-        // Arm the crash-recovery watchdog (relaunches ~5 min after a crash;
-        // `stop` disarms, `auto_restart = false` opts out — including
-        // disarming a watchdog left loaded by a previous opted-in config).
-        // Best-effort.
         let autoRestartOn = config.provider.autoRestart
-        switch WatchdogAgent.rearmAction(
-            autoRestartEnabled: autoRestartOn,
-            isLoaded: WatchdogAgent.isLoaded()
-        ) {
-        case .arm:
-            do {
-                try WatchdogAgent.installAndStart(
-                    configPath: snapshot.configPath
-                )
-            } catch {
-                printError("note: could not install crash-recovery watchdog: \(error)")
-            }
-        case .disarm:
-            try? WatchdogAgent.stop()
-        case nil:
-            break
-        }
+        let watchdogOK = try ProviderStartSequence.start(
+            coordinatorURL: coordinatorURL, models: selectedModelIDs, configPath: configPath,
+            watchdogConfigPath: snapshot.configPath, autoRestart: autoRestartOn,
+            localEndpoint: LaunchAgent.LocalEndpointOptions(enabled: localEndpoint, port: port, bind: bind, noAuth: noAuth))
+        if !watchdogOK { printError("note: could not install crash-recovery watchdog") }
 
         if guidedOnboarding {
             try OnboardingState.complete()

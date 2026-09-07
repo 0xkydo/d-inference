@@ -535,7 +535,7 @@ public enum LaunchAgent: Sendable {
 
     /// Resolve the current executable path. Falls back to ~/.darkbloom/bin/darkbloom.
     /// Shared with `WatchdogAgent` via `LaunchctlControl`.
-    private static func currentExecutablePath() -> String {
+    public static func currentExecutablePath() -> String {
         LaunchctlControl.currentExecutablePath()
     }
 

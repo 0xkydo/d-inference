@@ -7,13 +7,15 @@ from pathlib import Path
 import re
 
 
-def prepare(directory, expected_commit):
+def prepare(directory, expected_commit, expected_repository="Layr-Labs/d-inference"):
     record = json.loads((directory / "darkbloom-qualification-manifest.json").read_text())
     if record.get("schema_version") != 1 or record.get("publish_release") is not False:
         raise ValueError("Expected an unpublished workflow candidate")
     if not re.fullmatch(r"[0-9a-f]{40}", expected_commit) or record["source"]["sha"] != expected_commit:
         raise ValueError("Candidate source commit does not match the requested checkout")
-    if record["source"]["repository"] != "Layr-Labs/d-inference":
+    if expected_repository not in {"Layr-Labs/d-inference", "0xkydo/d-inference"}:
+        raise ValueError("Unsupported candidate repository")
+    if record["source"]["repository"] != expected_repository:
         raise ValueError("Unexpected candidate repository")
     if record["notarization"]["status"] != "Accepted":
         raise ValueError("Candidate did not pass notarization")
@@ -40,8 +42,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", type=Path)
     parser.add_argument("--commit", required=True)
+    parser.add_argument("--repo", choices=["Layr-Labs/d-inference", "0xkydo/d-inference"], default="Layr-Labs/d-inference")
     args = parser.parse_args()
-    metadata = prepare(args.directory, args.commit)
+    metadata = prepare(args.directory, args.commit, args.repo)
     target = args.directory.resolve() / "local-release.json"
     target.write_text(json.dumps(metadata, separators=(",", ":")) + "\n")
     print(target)

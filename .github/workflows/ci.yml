@@ -173,6 +173,12 @@ jobs:
           done < <(
             find provider-swift/.build -type d -path '*.xctest/Contents/MacOS' -print
           )
+      - name: Build and test Bubble Tea and its Swift session
+        run: |
+          scripts/build-provider-tui.sh
+          cd provider-tui && go test -race ./... && cd ..
+          python3 scripts/onboarding/test-session.py
+          python3 scripts/onboarding/test-companion-package.py
       - name: Run Swift tests
         working-directory: provider-swift
         # NOTE: do NOT pass --build-tests-relinking flags; the bundle is already

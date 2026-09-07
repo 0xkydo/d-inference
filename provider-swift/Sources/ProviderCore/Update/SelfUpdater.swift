@@ -606,6 +606,7 @@ public struct SelfUpdater: Sendable {
                     }
                 } else {
                     if verification.verifyRuntimeCapabilities {
+                        try OnboardingCompanionVerifier.rejectFlat(flatDarkbloom)
                         try FanHelperCapabilityVerifier.rejectFanCapableFlatExecutable(
                             flatDarkbloom
                         )
@@ -671,6 +672,8 @@ public struct SelfUpdater: Sendable {
                         label: "Darkbloom.app",
                         deep: true
                     )
+                    try OnboardingCompanionVerifier.verify(app: app,
+                        executable: app.appendingPathComponent("Contents/MacOS/darkbloom"), signaturePolicy: .darkbloomProduction)
                     try FanHelperCapabilityVerifier.verify(
                         app: app,
                         executable: app.appendingPathComponent(
@@ -1108,6 +1111,7 @@ public struct SelfUpdater: Sendable {
         fileManager: FileManager,
         signaturePolicy: DarkbloomCodeSignature.Policy
     ) throws {
+        try OnboardingCompanionVerifier.verify(app: app, executable: executable, signaturePolicy: signaturePolicy)
         try FanHelperCapabilityVerifier.verify(
             app: app,
             executable: executable,

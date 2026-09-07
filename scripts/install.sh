@@ -40,17 +40,19 @@ fail_install() {
 # resources, and the atomic install verification still run unchanged.
 parse_install_options() {
     INSTALL_ONLY=false
+    ONBOARDING_TUI=false
     RELEASE_FILE=''
     while [ "$#" -gt 0 ]; do
         case "$1" in
             --install-only) INSTALL_ONLY=true; shift ;;
+            --tui) ONBOARDING_TUI=true; shift ;;
             --release-file)
                 if [ "$#" -lt 2 ] || [ ! -r "$2" ] || [ ! -f "$2" ]; then
                     echo "--release-file requires a readable metadata file." >&2
                     return 64
                 fi
                 RELEASE_FILE=$2; shift 2 ;;
-            *) echo "usage: bash install.sh [--install-only] [--release-file FILE]" >&2; return 64 ;;
+            *) echo "usage: bash install.sh [--install-only] [--tui] [--release-file FILE]" >&2; return 64 ;;
         esac
     done
 }
@@ -143,6 +145,33 @@ verify_fan_helper_capability() {
     }
 }
 
+verify_onboarding_companion() {
+    local app=$1
+    local executable="$app/Contents/MacOS/darkbloom"
+    local helper="$app/Contents/MacOS/darkbloom-tui"
+    local marker="$app/Contents/Resources/darkbloom-runtime-capabilities/onboarding-session-v1"
+    local code=0 present=0 companion=0
+    LC_ALL=C grep -a -q -F 'darkbloom-onboarding-session-v1' "$executable" && code=1
+    if [ -e "$marker" ] || [ -L "$marker" ]; then present=1; fi
+    if [ -e "$helper" ] || [ -L "$helper" ]; then companion=1; fi
+    [ "$code" -eq "$present" ] && [ "$present" -eq "$companion" ] || {
+        fail_install "Onboarding CLI capability, marker, and companion must be present together."
+        return 1
+    }
+    [ "$code" -eq 1 ] || return 0
+    [ -f "$marker" ] && [ ! -L "$marker" ] && [ "$(tr -d '[:space:]' < "$marker")" = 1 ] \
+        && [ -f "$helper" ] && [ ! -L "$helper" ] && [ -x "$helper" ] \
+        && [ "$(stat -f '%Lp' "$helper" 2>/dev/null || true)" = 755 ] || {
+        fail_install "Invalid onboarding companion or capability marker."
+        return 1
+    }
+    verify_code_requirement "$helper" 0 \
+        'anchor apple generic and identifier "io.darkbloom.onboarding" and certificate leaf[subject.OU] = "SLDQ2GJ6TL"' || {
+        fail_install "Onboarding companion does not satisfy the pinned signature requirement."
+        return 1
+    }
+}
+
 verify_staged_app() {
     local app=$1
     local executable="$app/Contents/MacOS/darkbloom"
@@ -157,6 +186,7 @@ verify_staged_app() {
         verify_staged_app_signature "$app" || return 1
     fi
     verify_fan_helper_capability "$app" || return 1
+    verify_onboarding_companion "$app" || return 1
 
     local code_has_paged=0
     local marker_present=0
@@ -320,6 +350,11 @@ install_bundle_atomically() {
             return 1
         }
     else
+        if LC_ALL=C grep -a -q -F 'darkbloom-onboarding-session-v1' "$flat_bin/darkbloom"; then
+            rm -rf "$stage"
+            fail_install "Onboarding-capable releases require the signed Darkbloom.app layout."
+            return 1
+        fi
         if [ "$INSTALL_TEST_MODE" = "1" ]; then
             codesign --verify --strict --verbose=2 "$flat_bin/darkbloom" >/dev/null 2>&1 || {
                 rm -rf "$stage"
@@ -358,7 +393,15 @@ finish_installation() {
             # A coordinator may publish this installer before the new CLI release.
             # Public --help is the compatibility probe; never execute an unknown flag.
             if DARKBLOOM_NO_UPDATE_CHECK=1 "$BIN_DIR/darkbloom" start --help | grep -q -- '--onboarding'; then
-                if ! DARKBLOOM_NO_UPDATE_CHECK=1 "$BIN_DIR/darkbloom" start --onboarding \
+                local frontend=(--onboarding)
+                if [ "${ONBOARDING_TUI:-false}" = true ]; then
+                    if ! DARKBLOOM_NO_UPDATE_CHECK=1 "$BIN_DIR/darkbloom" start --help | grep -q -- '--tui'; then
+                        echo "  This release has no Bubble Tea companion. Continue with darkbloom start."
+                        return 1
+                    fi
+                    frontend=(--onboarding --tui)
+                fi
+                if ! DARKBLOOM_NO_UPDATE_CHECK=1 "$BIN_DIR/darkbloom" start "${frontend[@]}" \
                     --coordinator-url "$COORD_URL" </dev/tty; then
                     echo ""
                     echo "  Setup is unfinished. Your CLI is installed."

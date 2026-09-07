@@ -49,5 +49,20 @@ do {
 // help instead of running (#286). Routing through `inout any AsyncParsableCommand`
 // forces the async witness. Covered by CLIDispatchTests.
 func runAsyncCommand(_ command: inout any AsyncParsableCommand) async throws {
+    let lease = try onboardingCommandLease(command)
+    defer { withExtendedLifetime(lease) {} }
     try await command.run()
+}
+
+/// Serialize existing mutating CLI paths with the session. Foreground serving
+/// never holds this gate; the Go launcher delegates ownership to its Swift child.
+func onboardingCommandLease(_ command: any AsyncParsableCommand) throws -> ProviderOperationLock? {
+    if let start = command as? Start {
+        return start.foreground || start.local || start.tui ? nil : try ProviderOperationLock.setup()
+    }
+    if command is Login || command is Logout || command is Enroll || command is Unenroll
+        || command is Restart || command is Stop || command is Models.Download || command is Models.Remove {
+        return try ProviderOperationLock.setup()
+    }
+    return nil
 }

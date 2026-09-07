@@ -95,3 +95,7 @@ docs/RUNBOOK.md
 
 # Local performance binaries and raw diagnostic captures
 /artifacts/
+
+# Worktree-local development toolchains
+/.tools/
+/provider-tui/bin/
