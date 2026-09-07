@@ -1,6 +1,6 @@
 # Test
 
-> Last updated: 2026-09-07 · commit `bbf6f83d4`
+> Last updated: 2026-09-07 · commit `e948063d1`
 
 How to run the unit tests for each component, the end-to-end suite that boots a
 real coordinator + Swift provider against ephemeral Postgres, and the docs
@@ -140,6 +140,7 @@ make benchmark-wrapper-test        # python3 -m unittest discover -s gemma_contb
 ./scripts/sync-install-embed.sh check   # coordinator/api/install.sh byte-identical to scripts/install.sh
 python3 scripts/test-install-onboarding.py # fake-CLI PTY handoff, updates, unattended, resume, old releases
 python3 scripts/onboarding/test-reset.py   # scoped cleanup, symlink refusal, shell backup preservation
+python3 scripts/test-release-candidate.py  # nonpublishing release gates and candidate provenance
 ./scripts/test-prod-env-refresh.sh      # deploy/gcp/prod/refresh-env.sh contract
 ./scripts/test-publish-model.sh         # scripts/publish-model.sh dry-run contract
 ```

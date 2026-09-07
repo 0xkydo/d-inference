@@ -1,6 +1,6 @@
 # Release a provider version
 
-> Last updated: 2026-09-04 · commit `ac60c5ada`
+> Last updated: 2026-09-07 · commit `e948063d1`
 
 Runbook for shipping a new `darkbloom` provider CLI: bump the two version
 constants, land the changelog, push a `vX.Y.Z` tag, approve the `prod`
@@ -116,6 +116,25 @@ Without a tag the version is read from `ProviderCore.swift` (or
 without a tag is refused ("Production publication requires a source-matching
 release tag"). Dev releases use `DEV_*` secrets, register with the dev
 coordinator, and create no GitHub Release.
+
+### 5a. Signed test artifact without a deployed coordinator
+
+```bash
+gh workflow run release-swift.yml --ref <branch> \
+  -f environment=dev -f publish_release=false
+```
+
+This builds, signs, notarizes, and runs the same final bundle checks, then retains
+only the distributable archive and an allowlisted provenance manifest as a GitHub
+Actions artifact for 30 days. R2 credentials/uploads and coordinator registration
+are skipped. No live dev environment is required; `dev` here selects the GitHub
+environment used for signing. Existing tag pushes and manual runs without the
+new flag retain their publishing behavior. A nonpublishing `prod` run is refused.
+
+`scripts/resolve-provider-release.sh` validates mode/version before writing job
+outputs. `scripts/release-qualification-manifest.py` verifies the final archive
+hash and accepts only Apple's accepted submission status. Follow
+[onboarding-test.md](../developer/onboarding-test.md) to test the candidate on a Mac.
 
 ### 6. Approve the environment deployment
 

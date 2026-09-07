@@ -1,6 +1,6 @@
 # Test provider onboarding on a Mac
 
-> Last updated: 2026-09-07 · commit `bbf6f83d4`
+> Last updated: 2026-09-07 · commit `e948063d1`
 
 Test the real installer, device enrollment, account linkage, model downloads,
 and background startup on a physical Apple Silicon Mac. Use the reset script
@@ -8,38 +8,56 @@ to repeat first-time setup without redownloading models on every pass.
 
 ## Prerequisites
 
-- Use the M3 Max with 128 GB, a logged-in desktop session, and the supported
-  macOS/security configuration in [hardware requirements](../provider/hardware-requirements.md).
-  Use UTM for supplementary UI/recovery checks; record hardware attestation
-  and inference results from the physical Mac.
-- Copy this checkout's `scripts/` directory to the test Mac. Run the commands
-  below from its parent directory. No Swift build is needed on that Mac when
-  testing a signed release.
-- **Publish a signed candidate containing these changes to dev first.** Follow
-  [provider release](../operations/provider-release.md) using
-  `workflow_dispatch`, `environment=dev`, and a reviewed source ref. Record
-  the source SHA, version, and signed binary hash from that run. Publication
-  changes the shared dev release; coordinate it with other dev users. A local
-  `.build/debug/darkbloom` is useful for UI tests but cannot substitute for the
-  signed, provisioned bundle in the full device-verification test.
-- Use the dev account/console and coordinator together. Dev is configured to
-  exercise MDM and MDA in `deploy/environments/dev.env`; check its current
-  health and release metadata before resetting the Mac. A missing release
-  (`404`) or unavailable endpoint must be fixed before testing.
+- Use an Apple Silicon Mac with a logged-in desktop session and the supported
+  [macOS/security configuration](../provider/hardware-requirements.md). The
+  M3 Max with 128 GB is the physical test target.
+- Fetch the current `codex/cli-onboarding-m3-test` branch. It includes the
+  installer, production onboarding code, candidate helpers, and reset script.
+- A **signed, notarized candidate from this branch**, downloaded from GitHub
+  Actions. A local debug build cannot substitute for the signed bundle's
+  entitlement and provisioning contract.
+- Python 3 and `gh` for downloading/preparing the test artifact. They are test
+  tooling; the customer installer continues to require neither.
+
+No running dev coordinator is required to build or install this candidate.
+`environment=dev` below selects the GitHub signing environment; with
+`publish_release=false`, the workflow skips R2 uploads and release registration.
+It does not deploy infrastructure or update the public release.
+
+The interactive test uses the existing production account/catalog/enrollment
+services on your own test Mac. These are real account/device actions and model
+downloads. For UI testing, quit at the final Enter-to-start gate. A complete
+network-readiness test additionally requires the coordinator to accept the
+candidate's exact signed binary identity; local code signing alone does not
+satisfy that gate. Registering a production candidate is a separate operation.
 
 ## Steps
 
-### 1. Confirm the candidate is available
+### 1. Build and prepare the signed candidate
 
 ```bash
-curl -fsS https://api.dev.darkbloom.xyz/health
-curl -fsS https://api.dev.darkbloom.xyz/v1/releases/latest
+gh workflow run release-swift.yml --repo Layr-Labs/d-inference \
+  --ref codex/cli-onboarding-m3-test \
+  -f environment=dev -f publish_release=false
 ```
 
-Compare `version` and `binary_hash` with the candidate release run. The public
-production install URL and an unmodified dev release do not test local changes.
-The repository installer still fetches the registered release from the selected
-coordinator, even when you run the script from this checkout.
+After that run succeeds, download its `darkbloom-dev-qualification-<run-id>-<attempt>`
+artifact. Substitute the actual run ID and attempt below. Use the exact checkout
+commit built by the run when preparing the artifact.
+
+```bash
+gh run download <run-id> --repo Layr-Labs/d-inference \
+  --name darkbloom-dev-qualification-<run-id>-<attempt> \
+  --dir "$HOME/Downloads/darkbloom-cli-candidate"
+python3 scripts/onboarding/prepare-candidate.py \
+  "$HOME/Downloads/darkbloom-cli-candidate" --commit "$(git rev-parse HEAD)"
+```
+
+Preparation checks the repository, source SHA, accepted notarization record,
+archive size/hash, and binary/metallib hash fields, then writes `local-release.json`.
+The installer subsequently verifies the signed archive contents and pinned
+Developer ID. Fetching the ordinary public installer without this local metadata
+still installs the currently registered release, not the candidate.
 
 ### 2. Reset the test installation
 
@@ -80,27 +98,27 @@ from a working signed bundle. The script keeps the executable if cleanup fails.
 With this candidate, `unenroll` reports keychain failures; older releases may
 silently ignore them, so use the candidate CLI for a verified identity reset.
 
-### 3. Run the installer from this checkout
+### 3. Run the real installer with the candidate archive
 
 ```bash
-cat scripts/install.sh | COORD_URL=https://api.dev.darkbloom.xyz bash
+cat scripts/install.sh | COORD_URL=https://api.darkbloom.dev bash -s -- \
+  --release-file "$HOME/Downloads/darkbloom-cli-candidate/local-release.json"
 ```
 
-This exercises the pipe-to-Bash handoff with the new shell source and the dev
-signed bundle. It continues through enrollment, browser account linkage, the
-model picker and downloads, then waits at **Press Enter to start Darkbloom**.
-Do not pipe its output to `tee`: onboarding requires a terminal for both input
-and output. Record a transcript through the terminal emulator if needed.
+`--release-file` replaces release discovery only. Bundle hashes, pinned signing
+requirements, runtime-resource checks, and the atomic install path still run.
+The pipe hands the real terminal to the new CLI, which continues through
+profile approval, browser account linkage, model selection, and downloads.
 
-After the coordinator's embedded installer is also deployed to dev, test the
-literal customer command against dev:
+For the first UI pass, enter `q` at **Press Enter to start Darkbloom**. The
+candidate remains installed and setup can resume with `darkbloom start`.
+No verification success should be inferred from completing these screens.
+Starting the background service is a separate test once its binary identity
+is accepted by the coordinator. A not-yet-registered candidate can be rejected
+or remain unverified after launch; do not report that as a passing trust test.
 
-```bash
-curl -fsSL https://api.dev.darkbloom.xyz/install.sh | bash
-```
-
-Deploying the installer alone cannot add the new flow to an older CLI; the
-shell detects older CLIs and prints their manual setup commands instead.
+Do not pipe the installer's output to `tee`: onboarding requires a terminal
+for both input and output. Use the terminal emulator's transcript feature.
 
 ### 4. Exercise the important transitions
 
@@ -111,7 +129,7 @@ shell detects older CLIs and prints their manual setup commands instead.
 | Additional models | Expand the hidden section when the live catalog contains models beyond the estimate | A fit caveat is visible; they can be downloaded, but this selection does not enable them for serving; choose at least one fitting model to finish |
 | Interruption | Quit before enrollment approval or final start; interrupt a download separately; run `darkbloom start` | The same coordinator/config and model intent resume; completed/partial downloads are reused; final Enter is still required |
 | Update | Complete setup, rerun the same installer while running, then repeat after `darkbloom stop` | No enrollment/account/model prompts; running/stopped service state is preserved; the installer prints the applicable restart/start instruction |
-| Other entry points | Try `darkbloom enroll`, `darkbloom login`, `darkbloom models catalog`, `darkbloom restart`, and `darkbloom doctor` | The standalone commands remain usable; the saved dev coordinator is retained after setup |
+| Other entry points | Try `darkbloom enroll`, `darkbloom login`, `darkbloom models catalog`, `darkbloom restart`, and `darkbloom doctor` | The standalone commands remain usable; the configured coordinator is retained after setup |
 
 Repeat the model-picker pass with ordinary apps open and closed. Its estimate
 must use **128 GB total RAM** on this machine, not currently free RAM. It
@@ -122,7 +140,8 @@ entries on a large Mac; do not expect a hidden section when there are none.
 For unattended/update automation, the shell-only path is:
 
 ```bash
-COORD_URL=https://api.dev.darkbloom.xyz bash scripts/install.sh --install-only
+COORD_URL=https://api.darkbloom.dev bash scripts/install.sh --install-only \
+  --release-file "$HOME/Downloads/darkbloom-cli-candidate/local-release.json"
 ```
 
 ## Verify
@@ -135,12 +154,12 @@ darkbloom doctor
 darkbloom models list
 ```
 
-The binary hash must match the candidate. Confirm current device verification
-and a ready model; a pending-readiness message is not a pass. Then send an
-actual [self-route request](../provider/self-route.md), replacing the example's
-production URL with `https://api.dev.darkbloom.xyz` and using an API key from
-the same dev account. Self-route relaxes the hardware-trust floor, so a
-successful response alone does not prove attestation; check both results.
+The binary hash must match the candidate. Record which UI transitions were
+exercised. For a separately authorized full-network test with a recognized
+candidate, confirm current device verification and a ready model, then send an
+actual [self-route request](../provider/self-route.md) using the same account.
+Self-route relaxes the hardware-trust floor, so a successful response alone does
+not prove attestation; check both results. Pending readiness is not a pass.
 
 Local regression checks, without enrolling or removing host state:
 
@@ -148,6 +167,7 @@ Local regression checks, without enrolling or removing host state:
 python3 scripts/test-install-onboarding.py
 bash scripts/test-install-atomic.sh
 python3 scripts/onboarding/test-reset.py
+python3 scripts/test-release-candidate.py
 swift test --package-path provider-swift --filter 'Onboarding|TerminalPicker|PickerEntry|LocalDataCleanup'
 ```
 

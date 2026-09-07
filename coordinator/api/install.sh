@@ -35,6 +35,34 @@ fail_install() {
     return 1
 }
 
+# Developer testing can supply release metadata for a local signed archive.
+# This changes discovery only: bundle hashes, pinned Developer ID, runtime
+# resources, and the atomic install verification still run unchanged.
+parse_install_options() {
+    INSTALL_ONLY=false
+    RELEASE_FILE=''
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --install-only) INSTALL_ONLY=true; shift ;;
+            --release-file)
+                if [ "$#" -lt 2 ] || [ ! -r "$2" ] || [ ! -f "$2" ]; then
+                    echo "--release-file requires a readable metadata file." >&2
+                    return 64
+                fi
+                RELEASE_FILE=$2; shift 2 ;;
+            *) echo "usage: bash install.sh [--install-only] [--release-file FILE]" >&2; return 64 ;;
+        esac
+    done
+}
+
+read_release_metadata() {
+    if [ -n "$RELEASE_FILE" ]; then
+        cat "$RELEASE_FILE"
+    else
+        curl -fsSL "$COORD_URL/v1/releases/latest"
+    fi
+}
+
 verify_file_hash() {
     local file=$1
     local expected=$2
@@ -376,12 +404,7 @@ fi
 
 # The script itself may arrive on stdin via curl. Never read prompts from that
 # pipe; the CLI receives /dev/tty only after the complete install has finished.
-INSTALL_ONLY=false
-case "${1:-}" in
-    "") ;;
-    --install-only) INSTALL_ONLY=true ;;
-    *) echo "usage: bash install.sh [--install-only]" >&2; exit 64 ;;
-esac
+parse_install_options "$@"
 HAD_INSTALL=false
 if [ -e "$BIN_DIR/darkbloom" ] || [ -d "$INSTALL_DIR/Darkbloom.app" ] \
     || [ -d "$HOME/.eigeninference/bin" ] || [ -d "$HOME/.dginf/bin" ] \
@@ -409,12 +432,16 @@ echo "  $CHIP · ${MEM}GB · macOS $MACOS"
 echo ""
 
 # ─── Step 1: Fetch latest release ────────────────────────────
-echo "→ [1/3] Fetching latest release from $COORD_URL ..."
+if [ -n "$RELEASE_FILE" ]; then
+    echo "→ [1/3] Reading signed test-candidate metadata from $RELEASE_FILE ..."
+else
+    echo "→ [1/3] Fetching latest release from $COORD_URL ..."
+fi
 
-RELEASE_JSON=$(curl -fsSL "$COORD_URL/v1/releases/latest" 2>/dev/null || echo "")
+RELEASE_JSON=$(read_release_metadata 2>/dev/null || echo "")
 if [ -z "$RELEASE_JSON" ]; then
-    echo "  ✗ Could not reach coordinator at $COORD_URL"
-    echo "    Check your internet connection and try again."
+    echo "  ✗ Could not read release metadata."
+    echo "    Check ${RELEASE_FILE:-$COORD_URL/v1/releases/latest} and try again."
     exit 1
 fi
 

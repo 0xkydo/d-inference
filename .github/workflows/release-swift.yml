@@ -50,6 +50,11 @@ on:
         type: choice
         options: [dev, prod]
         default: dev
+      publish_release:
+        description: 'Publish release (false builds a signed test artifact without a coordinator)'
+        required: true
+        type: boolean
+        default: true
       version_override:
         description: 'Optional version string when running manually (otherwise derived from tag)'
         required: false
@@ -82,43 +87,24 @@ jobs:
     outputs:
       environment: ${{ steps.pick.outputs.environment }}
       version: ${{ steps.pick.outputs.version }}
+      publish_release: ${{ steps.pick.outputs.publish_release }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - id: pick
-        run: |
-          set -euo pipefail
-          if [ -n "${{ inputs.environment }}" ]; then
-            ENV="${{ inputs.environment }}"
-          else
-            ENV="prod"
-          fi
-          if [ "${{ github.ref_type }}" = "tag" ] && [[ "${{ github.ref_name }}" == *-dev.* ]]; then
-            echo "::error::-dev tags are unsupported by the exact-version release contract; use workflow_dispatch with environment=dev"
-            exit 1
-          fi
-          if [ "$ENV" = "prod" ] && [ "${{ github.ref_type }}" != "tag" ]; then
-            echo "::error::Production publication requires a source-matching release tag"
-            exit 1
-          fi
-          echo "environment=$ENV" >> "$GITHUB_OUTPUT"
-
-          if [ -n "${{ inputs.version_override }}" ]; then
-            VERSION="${{ inputs.version_override }}"
-          elif [ "${{ github.ref_type }}" != "tag" ]; then
-            VERSION=$(awk -F'\"' '/public static let version =/ { print $2 }' \
-              provider-swift/Sources/ProviderCore/ProviderCore.swift)
-          else
-            REF="${GITHUB_REF_NAME#v}"
-            VERSION="${REF%-swift*}"
-          fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Resolved env=$ENV version=$VERSION"
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_ENVIRONMENT: ${{ inputs.environment }}
+          INPUT_PUBLISH_RELEASE: ${{ inputs.publish_release }}
+          INPUT_VERSION_OVERRIDE: ${{ inputs.version_override }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: bash scripts/resolve-provider-release.sh
 
       - name: Fail before approval on version drift
         run: ./scripts/check-release-version.sh "${{ steps.pick.outputs.version }}"
 
   build-and-release:
-    name: Build, sign, notarize, upload, register
+    name: Build, sign, notarize (publish optional)
     needs: [resolve-env]
     runs-on: blacksmith-12vcpu-macos-latest
     environment: ${{ needs.resolve-env.outputs.environment }}
@@ -126,9 +112,11 @@ jobs:
     env:
       VERSION: ${{ needs.resolve-env.outputs.version }}
       ENV_PREFIX: ${{ needs.resolve-env.outputs.environment }}
+      PUBLISH_RELEASE: ${{ needs.resolve-env.outputs.publish_release }}
 
     steps:
       - name: Resolve env-specific secrets
+        if: needs.resolve-env.outputs.publish_release == 'true'
         env:
           ENV_PREFIX: ${{ needs.resolve-env.outputs.environment }}
           DEV_R2_ACCESS_KEY_ID: ${{ secrets.DEV_R2_ACCESS_KEY_ID }}
@@ -222,6 +210,7 @@ jobs:
           rm -f /tmp/cert.p12
 
       - name: Install awscli (R2)
+        if: needs.resolve-env.outputs.publish_release == 'true'
         run: |
           if ! command -v aws >/dev/null 2>&1; then
             brew install awscli >/dev/null 2>&1 || true
@@ -788,7 +777,31 @@ jobs:
           echo "Bundle hash:   $BUNDLE_HASH"
           echo "Metallib hash: $METALLIB_HASH"
 
+      # This path is reached only after ALL signing/notary/archive/runtime
+      # checks above succeed. Never upload the submission ZIP, raw notary log,
+      # staging directory, keychain, or the rest of /tmp.
+      - name: Write dev qualification manifest
+        if: needs.resolve-env.outputs.environment == 'dev' && needs.resolve-env.outputs.publish_release == 'false'
+        run: |
+          python3 scripts/release-qualification-manifest.py \
+            --artifact-dir /tmp \
+            --notary-result /tmp/notary-result.json \
+            --output /tmp/darkbloom-qualification-manifest.json
+
+      - name: Retain qualified dev artifacts
+        if: needs.resolve-env.outputs.environment == 'dev' && needs.resolve-env.outputs.publish_release == 'false'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: darkbloom-dev-qualification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /tmp/darkbloom-bundle-macos-arm64.tar.gz
+            /tmp/darkbloom-qualification-manifest.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
       - name: Upload bundle to R2
+        if: needs.resolve-env.outputs.publish_release == 'true'
         env:
           AWS_ACCESS_KEY_ID: ${{ env.r2_access_key_id }}
           AWS_SECRET_ACCESS_KEY: ${{ env.r2_secret_access_key }}
@@ -813,6 +826,7 @@ jobs:
             --endpoint-url "$R2_ENDPOINT" --only-show-errors
 
       - name: Register release with coordinator
+        if: needs.resolve-env.outputs.publish_release == 'true'
         env:
           COORDINATOR_URL: ${{ env.coordinator_url }}
           RELEASE_KEY: ${{ env.release_key }}
@@ -854,7 +868,7 @@ jobs:
           echo "Release v${VERSION} registered with coordinator"
 
       - name: Create GitHub Release
-        if: needs.resolve-env.outputs.environment == 'prod' && github.ref_type == 'tag'
+        if: needs.resolve-env.outputs.publish_release == 'true' && needs.resolve-env.outputs.environment == 'prod' && github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

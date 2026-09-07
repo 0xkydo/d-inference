@@ -2,6 +2,8 @@
 
 ## Unreleased: CLI onboarding
 
+- Build signed test artifacts without publishing a release or depending on a dev coordinator; accept local release metadata through the normal verified installer for test-Mac iteration.
+
 - Continue first-time `curl | bash` installation through read-only device enrollment, account linkage, model downloads, and an explicit Enter-to-start confirmation. Resume unfinished setup with `darkbloom start`; keep updates and unattended installs out of onboarding.
 - Group models into Downloaded, Available to download, and expandable additional models. Estimate fit from total RAM with existing safety reserves; allow additional downloads without enabling those models for serving.
 - Persist the onboarding coordinator for later CLI commands; preserve dev/local endpoints and keep explicit test configs isolated. Add a scoped test-Mac reset script; report incomplete unenrollment cleanup, including keychain failures.

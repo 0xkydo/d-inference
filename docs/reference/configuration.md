@@ -1,6 +1,6 @@
 # Configuration reference
 
-> Last updated: 2026-09-07 · commit `bbf6f83d4`
+> Last updated: 2026-09-07 · commit `e948063d1`
 
 Every environment variable read by the coordinator, the provider CLI
 (`darkbloom`), console-ui and admin-ui: accepted values, the compiled default,
@@ -404,7 +404,11 @@ Internals and file format: [`ssd-kv-cache.md`](ssd-kv-cache.md).
 | `GITHUB_SHA` | commit | unset | `provider-swift/Sources/ProviderBenchmark/SchedulerPrefillDecisionCLI.swift` | Fallback source SHA in benchmark reports. |
 | `DYLD_INSERT_LIBRARIES`, `DYLD_LIBRARY_PATH`, `DYLD_FRAMEWORK_PATH`, `LD_PRELOAD`, `MallocStackLogging`, `MallocStackLoggingNoCompact`, `MallocScribble`, `MallocGuardEdges`, `MallocLogFile`, `MallocErrorAbort`, `NSZombieEnabled`, `OBJC_DEBUG_POOL_ALLOCATION`, `CFNETWORK_DIAGNOSTICS` | — | — | `provider-swift/Sources/ProviderCore/Security/EnvironmentScrubber.swift` | Removed from the daemon's environment at start; reported as the `env_scrubbed` capability. |
 
-`scripts/install.sh` additionally reads `COORD_URL` (substituted by the coordinator when it serves `/install.sh`; required when the script is run from source), `HOME` (install root `$HOME/.darkbloom`), `TMPDIR` (temporary release archive) and the two code-signing requirement constants `DARKBLOOM_DESIGNATED_REQUIREMENT` and `DARKBLOOM_FAN_HELPER_REQUIREMENT`. The `--install-only` installer flag suppresses interactive onboarding. A fresh
+`scripts/install.sh` additionally reads `COORD_URL` (substituted by the coordinator when it serves `/install.sh`; required when the script is run from source), `HOME` (install root `$HOME/.darkbloom`), `TMPDIR` (temporary release archive) and the two code-signing requirement constants `DARKBLOOM_DESIGNATED_REQUIREMENT` and `DARKBLOOM_FAN_HELPER_REQUIREMENT`. The `--release-file FILE`
+installer option reads local candidate metadata instead of fetching the latest
+registered release; signing/hash/resource verification remains mandatory. See
+[the candidate test procedure](../developer/onboarding-test.md). The `--install-only`
+installer flag suppresses interactive onboarding. A fresh
 install keeps `~/.darkbloom/onboarding-pending` until the CLI starts the service;
 this records coordinator/model intent, not trust. Guided setup also persists the
 selected coordinator in `[coordinator].url` of the resolved TOML config

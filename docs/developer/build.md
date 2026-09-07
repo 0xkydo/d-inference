@@ -1,6 +1,6 @@
 # Build
 
-> Last updated: 2026-09-07 · commit `bbf6f83d4`
+> Last updated: 2026-09-07 · commit `e948063d1`
 
 How to build every component of Darkbloom from a fresh clone: the Go
 coordinator, the Rust prompt-contract sidecar, the Swift provider CLI (with its
@@ -13,7 +13,8 @@ Model publishing can pass `HUGGING_FACE_ARTIFACT_JSON` through
 
 For signed installer/onboarding testing on a separate Mac, follow
 [onboarding-test.md](onboarding-test.md). A debug build does not exercise the
-release bundle’s signing and provisioning contract.
+release bundle’s signing and provisioning contract. The signed test-artifact
+mode uses `publish_release=false` and requires no deployed dev coordinator.
 
 ## Prerequisites
 
