@@ -1,6 +1,6 @@
 # Test
 
-> Last updated: 2026-09-05 · commit `efc4e301b`
+> Last updated: 2026-09-07 · commit `bbf6f83d4`
 
 How to run the unit tests for each component, the end-to-end suite that boots a
 real coordinator + Swift provider against ephemeral Postgres, and the docs
@@ -115,6 +115,9 @@ prompt-contract implementations agree on the same production vectors; the
 procedure, its inputs and the regeneration flow are in
 [step 9](#9-prompt-contract-parity-fixtures-and-vectors).
 
+For real onboarding and repeated fresh installs on a test Mac, use the
+[onboarding test procedure](onboarding-test.md).
+
 **Installer** — `./scripts/test-install-atomic.sh` exercises the atomic
 install/replace path of `scripts/install.sh` in a temp dir (and runs
 `scripts/sync-install-embed.sh check` first).
@@ -135,6 +138,8 @@ node --test landing/earn-calculator-core.test.js
 make benchmark-wrapper-test        # python3 -m unittest discover -s gemma_contbatch/tests -t .   (in scripts/)
 ./scripts/check-release-version.sh # ProviderCore.version == coordinator LatestProviderVersion (see operations/provider-release.md)
 ./scripts/sync-install-embed.sh check   # coordinator/api/install.sh byte-identical to scripts/install.sh
+python3 scripts/test-install-onboarding.py # fake-CLI PTY handoff, updates, unattended, resume, old releases
+python3 scripts/onboarding/test-reset.py   # scoped cleanup, symlink refusal, shell backup preservation
 ./scripts/test-prod-env-refresh.sh      # deploy/gcp/prod/refresh-env.sh contract
 ./scripts/test-publish-model.sh         # scripts/publish-model.sh dry-run contract
 ```

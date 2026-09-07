@@ -1,6 +1,6 @@
 # Build
 
-> Last updated: 2026-09-05 · commit `4d9811f7c`
+> Last updated: 2026-09-07 · commit `bbf6f83d4`
 
 How to build every component of Darkbloom from a fresh clone: the Go
 coordinator, the Rust prompt-contract sidecar, the Swift provider CLI (with its
@@ -10,6 +10,10 @@ of it; the per-component steps below explain what each target runs.
 Model publishing can pass `HUGGING_FACE_ARTIFACT_JSON` through
 `scripts/publish-model.sh` to registration. See the
 [model publishing procedure](../operations/model-migration.md).
+
+For signed installer/onboarding testing on a separate Mac, follow
+[onboarding-test.md](onboarding-test.md). A debug build does not exercise the
+release bundle’s signing and provisioning contract.
 
 ## Prerequisites
 
@@ -277,3 +281,9 @@ ls console-ui/.next
 - [../operations/provider-release.md](../operations/provider-release.md) — provider release runbook.
 - [`../operations/coordinator-deploy.md`](../operations/coordinator-deploy.md) — container build and deploy on GCP.
 - [`../architecture/components/mlx-swift.md`](../architecture/components/mlx-swift.md) — why the metallib must match the MLX source.
+
+The installer delegates interactive first-time setup to the signed CLI after
+bundle verification. Its `start --help` capability check permits an older
+registered release to fall back to manual instructions. See
+[installation](../provider/installation.md) and the
+[script verification checks](./test.md#6-scripts-and-release-integrity).

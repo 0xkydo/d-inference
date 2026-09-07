@@ -1,6 +1,6 @@
 # Configuration reference
 
-> Last updated: 2026-09-05 · commit `94c7c31eb`
+> Last updated: 2026-09-07 · commit `bbf6f83d4`
 
 Every environment variable read by the coordinator, the provider CLI
 (`darkbloom`), console-ui and admin-ui: accepted values, the compiled default,
@@ -404,7 +404,15 @@ Internals and file format: [`ssd-kv-cache.md`](ssd-kv-cache.md).
 | `GITHUB_SHA` | commit | unset | `provider-swift/Sources/ProviderBenchmark/SchedulerPrefillDecisionCLI.swift` | Fallback source SHA in benchmark reports. |
 | `DYLD_INSERT_LIBRARIES`, `DYLD_LIBRARY_PATH`, `DYLD_FRAMEWORK_PATH`, `LD_PRELOAD`, `MallocStackLogging`, `MallocStackLoggingNoCompact`, `MallocScribble`, `MallocGuardEdges`, `MallocLogFile`, `MallocErrorAbort`, `NSZombieEnabled`, `OBJC_DEBUG_POOL_ALLOCATION`, `CFNETWORK_DIAGNOSTICS` | — | — | `provider-swift/Sources/ProviderCore/Security/EnvironmentScrubber.swift` | Removed from the daemon's environment at start; reported as the `env_scrubbed` capability. |
 
-`scripts/install.sh` additionally reads `COORD_URL` (substituted by the coordinator when it serves `/install.sh`; required when the script is run from source), `HOME` (install root `$HOME/.darkbloom`), `TMPDIR` (enrollment-profile temp dir only) and the two code-signing requirement constants `DARKBLOOM_DESIGNATED_REQUIREMENT` and `DARKBLOOM_FAN_HELPER_REQUIREMENT`. See [`../provider/installation.md`](../provider/installation.md).
+`scripts/install.sh` additionally reads `COORD_URL` (substituted by the coordinator when it serves `/install.sh`; required when the script is run from source), `HOME` (install root `$HOME/.darkbloom`), `TMPDIR` (temporary release archive) and the two code-signing requirement constants `DARKBLOOM_DESIGNATED_REQUIREMENT` and `DARKBLOOM_FAN_HELPER_REQUIREMENT`. The `--install-only` installer flag suppresses interactive onboarding. A fresh
+install keeps `~/.darkbloom/onboarding-pending` until the CLI starts the service;
+this records coordinator/model intent, not trust. Guided setup also persists the
+selected coordinator in `[coordinator].url` of the resolved TOML config
+(`provider-swift/Sources/darkbloom/Onboarding/OnboardingConfiguration.swift`).
+Startup schema migration preserves explicitly configured dev/local endpoints
+and does not copy an explicit `--config` file into the canonical config
+(`provider-swift/Sources/darkbloom/Darkbloom.swift`, `migrateConfigIfNeeded`). See
+[`../provider/installation.md`](../provider/installation.md).
 
 ## console-ui
 

@@ -72,6 +72,16 @@ public struct ModelDownloader: Sendable {
             throw ModelCatalogError.ineligible(
                 ModelRuntimeIneligibleError(eligibility: eligibility).localizedDescription)
         }
+        try await downloadForStorage(model: model, onProgress: onProgress)
+    }
+
+    /// Explicit user-selected storage, including models this Mac cannot run.
+    /// Download verification is unchanged. This never loads or advertises a model;
+    /// automated prefetch and normal download() retain their eligibility gate.
+    public func downloadForStorage(
+        model: CatalogModel,
+        onProgress: (@Sendable (ProgressEvent) -> Void)? = nil
+    ) async throws {
         if model.r2Prefix != nil, model.aggregateSHA256 != nil {
             let manifest: ModelManifest
             if let catalogClient {

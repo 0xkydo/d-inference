@@ -11,8 +11,8 @@ set -euo pipefail
 #   2. Downloads the provider app (binaries, metallib, SwiftPM resources)
 #   3. Verifies bundle SHA-256 + Apple Developer ID code signature
 #   4. Sets up the Secure Enclave identity
-#   5. Optionally enrolls in MDM (device attestation)
-#   6. Optionally downloads a starter model
+#   5. Continues first-time setup in the CLI when a terminal is attached
+# Use --install-only for fleet, CI, and other unattended installs.
 #
 # Zero prerequisites — just macOS 14+ on Apple Silicon. The Swift CLI
 # links mlx-swift directly and ships a colocated mlx.metallib for Metal
@@ -315,6 +315,45 @@ install_bundle_atomically() {
     rm -rf "$stage"
 }
 
+# Called after installation succeeds. Kept as a function so the handoff can be
+# tested with a fake CLI without changing this Mac's installation or account.
+finish_installation() {
+    echo ""
+    echo "  CLI installation complete."
+    echo ""
+    if [ "$INSTALL_ONLY" = true ]; then
+        echo "  Run darkbloom start when you are ready."
+    elif [ -f "$ONBOARDING_PENDING" ]; then
+        # An openable controlling terminal AND terminal output distinguish an
+        # interactive curl pipeline from SSH/CI/logging. Do not steal pipe input.
+        if [ -t 1 ] && ( : </dev/tty ) 2>/dev/null; then
+            # A coordinator may publish this installer before the new CLI release.
+            # Public --help is the compatibility probe; never execute an unknown flag.
+            if DARKBLOOM_NO_UPDATE_CHECK=1 "$BIN_DIR/darkbloom" start --help | grep -q -- '--onboarding'; then
+                if ! DARKBLOOM_NO_UPDATE_CHECK=1 "$BIN_DIR/darkbloom" start --onboarding \
+                    --coordinator-url "$COORD_URL" </dev/tty; then
+                    echo ""
+                    echo "  Setup is unfinished. Your CLI is installed."
+                    echo "  Continue with: darkbloom start --coordinator-url $COORD_URL"
+                    exit 1
+                fi
+            else
+                echo "  This CLI release uses manual setup. Run:"
+                echo "    darkbloom enroll --coordinator $COORD_URL"
+                echo "    darkbloom login"
+                echo "    darkbloom start --coordinator-url $COORD_URL"
+            fi
+        else
+            echo "  Continue enrollment, account linkage, and model selection in a terminal:"
+            echo "    darkbloom start --coordinator-url $COORD_URL"
+        fi
+    else
+        echo "  Existing installation updated."
+        echo "  Run darkbloom restart to use the new version if the provider is running."
+        echo "  Run darkbloom start if it is stopped."
+    fi
+}
+
 if [ "${1:-}" = "--verify-staged-app-signature-test" ]; then
     [ "$#" -eq 3 ] || {
         echo "usage: $0 --verify-staged-app-signature-test <app> <requirement>" >&2
@@ -335,17 +374,23 @@ if [ "${1:-}" = "--install-bundle-test" ]; then
     exit $?
 fi
 
-# Detect interactive vs piped (curl | bash).
-if [ -t 0 ]; then
-    INTERACTIVE=true
-else
-    INTERACTIVE=false
+# The script itself may arrive on stdin via curl. Never read prompts from that
+# pipe; the CLI receives /dev/tty only after the complete install has finished.
+INSTALL_ONLY=false
+case "${1:-}" in
+    "") ;;
+    --install-only) INSTALL_ONLY=true ;;
+    *) echo "usage: bash install.sh [--install-only]" >&2; exit 64 ;;
+esac
+HAD_INSTALL=false
+if [ -e "$BIN_DIR/darkbloom" ] || [ -d "$INSTALL_DIR/Darkbloom.app" ] \
+    || [ -d "$HOME/.eigeninference/bin" ] || [ -d "$HOME/.dginf/bin" ] \
+    || [ -e "$HOME/Library/LaunchAgents/io.darkbloom.provider.plist" ]; then
+    HAD_INSTALL=true
 fi
+ONBOARDING_PENDING="$INSTALL_DIR/onboarding-pending"
 
-echo "╔══════════════════════════════════════════════╗"
-echo "║  Darkbloom — Private AI on Verified Macs     ║"
-echo "╚══════════════════════════════════════════════╝"
-echo ""
+printf '\n  Darkbloom\n  Private AI on verified Macs\n\n'
 
 # ─── Pre-flight checks ───────────────────────────────────────
 if [ "$(uname)" != "Darwin" ]; then
@@ -364,7 +409,7 @@ echo "  $CHIP · ${MEM}GB · macOS $MACOS"
 echo ""
 
 # ─── Step 1: Fetch latest release ────────────────────────────
-echo "→ [1/5] Fetching latest release from $COORD_URL ..."
+echo "→ [1/3] Fetching latest release from $COORD_URL ..."
 
 RELEASE_JSON=$(curl -fsSL "$COORD_URL/v1/releases/latest" 2>/dev/null || echo "")
 if [ -z "$RELEASE_JSON" ]; then
@@ -394,10 +439,15 @@ echo "  Signed by: Developer ID Application: Eigen Labs, Inc."
 echo ""
 
 # ─── Step 2: Download + verify bundle ────────────────────────
-echo "→ [2/5] Downloading Darkbloom v${VERSION}..."
+echo "→ [2/3] Downloading Darkbloom v${VERSION}..."
 mkdir -p "$INSTALL_DIR" "$BIN_DIR"
+if [ "$HAD_INSTALL" = false ]; then
+    printf '%s\n' "$COORD_URL" > "$ONBOARDING_PENDING"
+fi
 
-TARBALL="/tmp/darkbloom-bundle.tar.gz"
+
+TARBALL="$(mktemp "${TMPDIR:-/tmp}/darkbloom-bundle.XXXXXX")"
+trap 'rm -f "$TARBALL"' EXIT
 curl -f#L "$BUNDLE_URL" -o "$TARBALL"
 
 ACTUAL_HASH=$(shasum -a 256 "$TARBALL" | cut -d' ' -f1)
@@ -438,11 +488,6 @@ SHELL
 fi
 export PATH="$BIN_DIR:$PATH"
 
-# Source rc so commands work in this shell. Disable -eu around it: rc files
-# may use unbound vars or shell-specific builtins that fail under bash strict.
-set +eu
-source "$RC" 2>/dev/null || true
-set -eu
 
 echo "  Binaries installed ✓"
 echo "  Shortcut: darkbloom"
@@ -465,103 +510,11 @@ done
 
 # ─── Step 3: Secure Enclave identity ─────────────────────────
 echo ""
-echo "→ [3/5] Provisioning Secure Enclave identity..."
+echo "→ [3/3] Provisioning Secure Enclave identity..."
 if "$BIN_DIR/darkbloom-enclave" info >/dev/null 2>&1; then
     echo "  Secure Enclave ✓ (P-256 key generated)"
 else
     echo "  Secure Enclave ⚠ (not available on this hardware; provider will run with reduced trust)"
 fi
 
-# ─── Step 4: Enrollment + device attestation ─────────────────
-echo ""
-echo "→ [4/5] Enrollment + device attestation..."
-
-ALREADY_ENROLLED=false
-if profiles status -type enrollment 2>&1 | grep -q "MDM enrollment: Yes"; then
-    ALREADY_ENROLLED=true
-fi
-
-if [ "$ALREADY_ENROLLED" = true ]; then
-    echo "  Already enrolled ✓"
-else
-    echo "  Requesting enrollment profile from coordinator..."
-    PROFILE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/Darkbloom-Enroll.XXXXXX")"
-    PROFILE_PATH="$PROFILE_DIR/Darkbloom-Enroll.mobileconfig"
-    if curl -fsSL -X POST "$COORD_URL/v1/enroll" \
-        -H "Content-Type: application/json" \
-        -d '{}' \
-        -o "$PROFILE_PATH" 2>/dev/null; then
-        echo ""
-        echo "  ┌──────────────────────────────────────────────────┐"
-        echo "  │ ACTION REQUIRED: Install the enrollment profile  │"
-        echo "  │                                                  │"
-        echo "  │ This profile lets the coordinator verify:        │"
-        echo "  │  • SIP, Secure Boot, system integrity            │"
-        echo "  │  • Your Secure Enclave is genuine Apple silicon  │"
-        echo "  │  • Device identity signed by Apple's Root CA     │"
-        echo "  │                                                  │"
-        echo "  │ Darkbloom CANNOT erase, lock, or control         │"
-        echo "  │ your Mac. Remove anytime in System Settings.     │"
-        echo "  └──────────────────────────────────────────────────┘"
-        echo ""
-        open "$PROFILE_PATH"
-        sleep 1
-        open "x-apple.systempreferences:com.apple.Profiles-Settings.extension"
-
-        echo "  System Settings opened — click Install and enter your password."
-        if [ "$INTERACTIVE" = true ]; then
-            echo ""
-            read -p "  Press Enter once you have installed the profile..." || true
-        else
-            echo "  After installing, the provider will verify on first start."
-            sleep 3
-        fi
-        if profiles status -type enrollment 2>&1 | grep -q "MDM enrollment: Yes"; then
-            echo "  Enrollment verified ✓"
-        else
-            echo "  Enrollment pending ⚠ (complete it in System Settings, or run: darkbloom enroll)"
-        fi
-    else
-        echo "  Enrollment ⚠ (coordinator unreachable — enroll later with: darkbloom enroll)"
-    fi
-fi
-
-# ─── Step 5: Optional starter model ──────────────────────────
-echo ""
-echo "→ [5/5] Inference model..."
-
-CATALOG_JSON=$(curl -fsSL "$COORD_URL/v1/models/catalog?type=text" 2>/dev/null || echo "")
-
-if [ -n "$CATALOG_JSON" ]; then
-    if [ "$INTERACTIVE" = true ]; then
-        echo ""
-        echo "  Available text models:"
-        echo "$CATALOG_JSON" \
-          | tr ',' '\n' \
-          | sed -n 's/.*"id":"\([^"]*\)".*"display_name":"\([^"]*\)".*"size_gb":\([0-9.]*\).*"min_ram_gb":\([0-9]*\).*/  • \2  ~\3 GB  (≥\4 GB RAM)  [\1]/p' \
-          | head -20
-        echo ""
-        echo "  Download a model with:"
-        echo "    darkbloom models download <id>"
-    else
-        echo "  Run interactively to pick a starter model:"
-        echo "    curl -fsSL $COORD_URL/install.sh | bash -s"
-        echo "  Or list the catalog with:  darkbloom models catalog"
-    fi
-else
-    echo "  Could not fetch model catalog (continuing anyway)."
-fi
-
-# ─── Done ────────────────────────────────────────────────────
-echo ""
-echo "╔══════════════════════════════════════════════╗"
-echo "║  Install complete                            ║"
-echo "╚══════════════════════════════════════════════╝"
-echo ""
-echo "  Next steps:"
-echo "    darkbloom doctor             # verify the system is ready"
-echo "    darkbloom models catalog     # browse available models"
-echo "    darkbloom models download <id>"
-echo "    darkbloom login              # link this Mac to your account"
-echo "    darkbloom start              # serve inference (interactive picker)"
-echo ""
+finish_installation

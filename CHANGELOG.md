@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased: CLI onboarding
+
+- Continue first-time `curl | bash` installation through read-only device enrollment, account linkage, model downloads, and an explicit Enter-to-start confirmation. Resume unfinished setup with `darkbloom start`; keep updates and unattended installs out of onboarding.
+- Group models into Downloaded, Available to download, and expandable additional models. Estimate fit from total RAM with existing safety reserves; allow additional downloads without enabling those models for serving.
+- Persist the onboarding coordinator for later CLI commands; preserve dev/local endpoints and keep explicit test configs isolated. Add a scoped test-Mac reset script; report incomplete unenrollment cleanup, including keychain failures.
+- Report verified readiness from fresh daemon state. Reuse standalone enrollment/login services and verified, resumable downloads; preserve the existing idle-memory policy during onboarding.
+
 ## Unreleased — provider console entry
 
 - Open the provider workspace directly from the console home page, removing the Consumer/Provider selection page. Keep chat and API access in workspace navigation.

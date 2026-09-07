@@ -1,11 +1,10 @@
 # Provider quickstart
 
-> Last updated: 2026-09-03 · commit `5d400cf75`
+> Last updated: 2026-09-07 · commit `bbf6f83d4`
 
-From a fresh Apple Silicon Mac to a provider that is registered with the
-coordinator, linked to your account and serving. For operators; install, check,
-log in, pick models, start — then enrol for the `hardware` trust level that
-public traffic requires.
+From a fresh Apple Silicon Mac to a verified provider linked to your account.
+The installer continues through enrollment, account linkage, model downloads,
+and an explicit Enter-to-start confirmation in your terminal.
 
 ## Prerequisites
 
@@ -23,84 +22,53 @@ public traffic requires.
 
 ## Steps
 
-### 1. Install
+### 1. Install and complete setup
 
 ```bash
 curl -fsSL https://api.darkbloom.dev/install.sh | bash
-source ~/.zshrc
 ```
 
-What the script verifies and writes is in [installation](./installation.md).
+The installer verifies the signed release and completes CLI installation before
+continuing setup (`scripts/install.sh`, `finish_installation`). In the same terminal:
 
-### 2. Check the machine
+1. Read the device verification explanation and read-only profile notice.
+2. Install the Darkbloom profile in System Settings → General → Device Management.
+   Return to the terminal after finishing the macOS prompts and press Enter.
+   Setup checks actual enrollment before continuing.
+3. Link your account in the browser using the displayed code. The terminal
+   continues automatically after approval; an existing account link is reused.
+4. Select models with arrows and Space, then press Enter to download them.
+   Downloaded models appear only when present. Available models are estimated
+   against total RAM with the system reserve, padded weights, working memory,
+   and minimum KV cache. Press `h` to reveal additional models; those can be
+   downloaded but are not enabled for serving on this Mac.
+5. At **Ready to start Darkbloom**, press Enter to launch the background service.
+   It starts again at login. `darkbloom stop` stops it and disables login startup.
 
-```bash
-darkbloom doctor
-```
+The terminal reports verified readiness only after a fresh daemon snapshot shows
+hardware trust and a warm model. Otherwise it reports readiness as pending and
+points to `darkbloom status` and `darkbloom doctor`. The existing idle-memory
+policy is preserved; manage it later with `darkbloom idle`.
 
-Lines marked `✗` are failures. Hardware, Metal, SIP, account link, MDM
-enrollment and coordinator reachability are all covered; the check names are
-listed in [troubleshooting](./troubleshooting.md#doctor-checks).
+See [installation](./installation.md) for verification and disk changes, and
+[attestation](./attestation.md) for the distinction between enrollment and trust.
 
-### 3. Download a model
-
-`darkbloom start` (`provider-swift/Sources/darkbloom/StartCommand.swift`) runs
-preflight checks (SIP, debugger, GPU, memory), offers to link your account if
-you are not logged in, shows an interactive model picker, asks whether models
-should stay loaded while idle (`Always ready`) or be unloaded after 60 minutes
-without requests and reloaded on demand (`Free when idle`, the default; or a
-custom window), then installs and starts a `launchd` user agent.
-
-`darkbloom models download` (`provider-swift/Sources/darkbloom/ModelsCommand.swift`)
-resolves the catalog entry and fetches from `https://models.darkbloom.ai`
-(`provider-swift/Sources/ProviderCore/Models/ModelDownloader.swift`,
-`defaultR2CDNURL`). `darkbloom start` also offers an interactive catalog picker
-when nothing is downloaded yet, so this step can be skipped.
-
-### 4. Link your account
-
-```bash
-darkbloom login
-```
-
-`Login` (`provider-swift/Sources/darkbloom/LoginCommand.swift`) runs the RFC 8628
-device-code flow (`provider-swift/Sources/ProviderCore/Auth/DeviceAuth.swift`,
-`performDeviceCodeLogin`): `POST /v1/device/code`, print the verification URL
-and one-time code, open the browser, poll `POST /v1/device/token` until you
-approve. The token is saved to `~/.darkbloom/auth_token`. This link is what
-makes the machine "yours" for [self-route](./self-route.md) and credits earnings
-to your account. `darkbloom start` offers this step inline if you skip it.
-
-### 5. Start serving
+### 2. Resume if interrupted
 
 ```bash
 darkbloom start
 ```
 
-`Start` (`provider-swift/Sources/darkbloom/StartCommand.swift`,
-`provider-swift/Sources/darkbloom/StartCommand+Daemon.swift`) prints the
-Terms-of-Service notice (starting is acceptance), runs preflight, offers inline
-login, shows the model picker unless `--model <id>` (repeatable) or `--all` is
-given, then writes `~/Library/LaunchAgents/io.darkbloom.provider.plist`
-(`RunAtLoad = true`, `KeepAlive = false`;
-`provider-swift/Sources/ProviderCore/Service/LaunchAgent.swift`) and starts it.
-With `provider.auto_restart = true` (the default) it also arms the crash-recovery
-watchdog `io.darkbloom.watchdog`
-(`provider-swift/Sources/ProviderCore/Service/WatchdogAgent.swift`). The service
-starts again at every login.
+An unfinished setup keeps its coordinator and model choices in
+`~/.darkbloom/onboarding-pending`. Enrollment is checked again, saved account
+linkage is reused, and completed model files are kept. Manifest downloads resume
+partial files. If the command is not on your current shell's PATH, open a new
+terminal or run `~/.darkbloom/bin/darkbloom start`.
 
-### 6. Enrol for public traffic
-
-```bash
-darkbloom enroll
-```
-
-A freshly started provider is `self_signed`; the coordinator sends public
-requests only to `hardware`-level machines, which requires MDM enrolment of
-this Mac. What the command does, how long the upgrade takes and how to read the
-result are in [Reaching and keeping `hardware` trust](./attestation.md#steps).
-Until then only your own [self-route](./self-route.md) requests reach the
-machine.
+Standalone `darkbloom enroll`, `darkbloom login`, and `darkbloom models download
+<id>` remain available. Updates do not restart onboarding. Unattended installers
+print the command to continue later; fleet and CI callers should explicitly use
+`curl -fsSL https://api.darkbloom.dev/install.sh | bash -s -- --install-only`.
 
 ## Verify
 
@@ -167,7 +135,7 @@ private_only = false         # true = serve only your own self-route traffic
   requests before a model is unloaded and its memory returned to the Mac
   (default 60; reloaded on demand with a ~10-30 s cold start), or `0` to keep
   models loaded for instant responses. `darkbloom start` asks for this
-  interactively; change it later with `darkbloom idle keep-loaded` /
+  on subsequent interactive starts, outside first-time onboarding; change it later with `darkbloom idle keep-loaded` /
   `darkbloom idle unload-after <minutes>`.
 - `backend.max_model_slots` — maximum resident models at once (default 3).
 - `config_version` — schema version of this file, written automatically on
