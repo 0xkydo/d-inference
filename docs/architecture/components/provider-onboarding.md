@@ -1,6 +1,6 @@
 # Provider onboarding session
 
-> Last updated: 2026-09-07 · commit `4314668d6`
+> Last updated: 2026-09-07 · commit `1ce4526c8`
 
 The opt-in `darkbloom start --tui` frontend runs Bubble Tea while a foreground
 session in the existing Swift executable owns onboarding. The provider still
@@ -67,8 +67,24 @@ A `watchdog_unavailable` notice preserves the existing best-effort watchdog
 behavior while keeping its failure visible.
 
 Progress distinguishes `transferring`, `verifying`, `publishing`, and
-`completed`. Byte totals alone never advance onboarding to Ready. Go displays
-the latest file progress; Swift owns both artifact integrity and eligibility.
+`completed`, with `queued` items in the inventory. Byte totals alone never
+advance onboarding to Ready. `OnboardingDownloadProgress` accumulates concurrent
+callbacks into self-contained frames before the pipe coalesces them. Each frame
+contains all selected model summaries, the current model's file inventory, and
+newly transferred bytes excluding the saved resume baseline. Manifest inventory
+comes from the downloader after validating saved files; Swift still owns artifact
+integrity and eligibility. Individual byte updates serialize at most ten times
+per second; phase changes emit immediately. The displayed inventory is bounded
+to 128 files with shortened labels, while aggregate counts cover every file.
+
+`provider-tui/download_view.go` (`downloadView`) pins overall transfer, bytes,
+rolling speed, ETA, elapsed time and model status above scrollable file bars.
+Totals use catalog estimates until manifests arrive and are marked approximate.
+Transfer ETA excludes verification time; hashing and publishing have explicit
+status text. Speed history expires during stalls, and the frontend never turns
+100% transferred into Ready itself. `provider-tui/download_progress.go`
+(`downloadClock`) uses newly transferred bytes for rate estimates. Small terminals
+retain the master bar and cancellation; larger ones add model and file detail.
 
 While `enrollment_pending`, the frontend schedules a `refresh` every two
 seconds after the preceding snapshot. It suppresses checks during another
