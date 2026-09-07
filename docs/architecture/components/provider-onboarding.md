@@ -1,6 +1,6 @@
 # Provider onboarding session
 
-> Last updated: 2026-09-07 · commit `1ce4526c8`
+> Last updated: 2026-09-07 · commit `dcede9151`
 
 The opt-in `darkbloom start --tui` frontend runs Bubble Tea while a foreground
 session in the existing Swift executable owns onboarding. The provider still
@@ -77,9 +77,11 @@ integrity and eligibility. Individual byte updates serialize at most ten times
 per second; phase changes emit immediately. The displayed inventory is bounded
 to 128 files with shortened labels, while aggregate counts cover every file.
 
-`provider-tui/download_view.go` (`downloadView`) pins overall transfer, bytes,
-rolling speed, ETA, elapsed time and model status above scrollable file bars.
-Totals use catalog estimates until manifests arrive and are marked approximate.
+`provider-tui/download_view.go` (`downloadView`) highlights approximate download ETA and overall progress above
+rows for every selected model, including queued and completed models. File bars,
+rolling speed and elapsed time are hidden behind the `d` detail toggle. Arrow
+keys browse models in the overview and files in detail mode. Totals use catalog
+estimates until manifests arrive.
 Transfer ETA excludes verification time; hashing and publishing have explicit
 status text. Speed history expires during stalls, and the frontend never turns
 100% transferred into Ready itself. `provider-tui/download_progress.go`

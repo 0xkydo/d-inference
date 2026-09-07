@@ -1,6 +1,6 @@
 # Test provider onboarding on a Mac
 
-> Last updated: 2026-09-07 · commit `1ce4526c8`
+> Last updated: 2026-09-07 · commit `dcede9151`
 
 Test the real installer, device enrollment, account linkage, model downloads,
 and background startup on a physical Apple Silicon Mac. Use the reset script
@@ -40,11 +40,14 @@ bottom; use Page Up/Down to read long text in a small terminal.
 To retry an interrupted download, quit the old screen with `q`, then run the
 same command above **without resetting**. Confirm the same models and press Enter.
 Completed files and partial transfers are reused. The download screen shows an
-overall transfer bar, bytes, speed, approximate ETA, elapsed time, and individual
-file bars. Use ↑/↓ to browse files; enlarge the terminal for more detail. A total
-prefixed with `~` includes catalog estimates for manifests not yet read. At 100%
-transfer, wait for integrity verification and publication before the final Start
-screen. Verification time is separate from download ETA.
+prominent download ETA, an overall bar, and a row for every selected model,
+marked Downloading, Queued, Checking or Ready. Use ↑/↓ to browse models. Press `d`
+for the active model's file bars, speed and elapsed time; press `d` again to return
+to the overview. Enlarge the terminal for more rows. ETA is approximate and uses
+catalog size estimates until manifests arrive. Keep the terminal open and your
+Mac awake and connected while you take a break. At 100% transfer, wait for
+integrity verification and publication before the final Start screen.
+Verification time is separate from download ETA.
 
 ## Signed installer prerequisites
 
@@ -223,7 +226,7 @@ macOS observation, not a coordinator trust verdict.
 | Fresh setup | Remove the profile and local state, then install | Enrollment is an explicit next step; account linkage follows confirmed enrollment; no background service starts before the final Enter |
 | Models | Select multiple models with Space, then Enter | Downloaded section appears only when populated; available models use total physical RAM with load safeguards; selected downloads reuse the verified downloader |
 | Additional models | Expand the hidden section when the live catalog contains models beyond the estimate | A fit caveat is visible; they can be downloaded, but this selection does not enable them for serving; choose at least one fitting model to finish |
-| Download dashboard | Download a model, browse file rows, resize, and wait for verification | Overall bar and cancel remain visible; file bars stay independent; resumed bytes count toward progress but not transfer speed; Ready appears only after verification |
+| Download dashboard | Download multiple models, toggle details with `d`, browse rows, resize, and wait for verification | Overall bar and cancel remain visible; file bars stay independent; resumed bytes count toward progress but not transfer speed; Ready appears only after verification |
 | Interruption | Quit before enrollment approval or final start; interrupt a download separately; run `darkbloom start --tui` | The same coordinator/config and model intent resume; completed/partial downloads are reused; final Enter is still required |
 | Update | Complete setup, rerun the same installer while running, then repeat after `darkbloom stop` | No enrollment/account/model prompts; running/stopped service state is preserved; the installer prints the applicable restart/start instruction |
 | Other entry points | Try `darkbloom enroll`, `darkbloom login`, `darkbloom models catalog`, `darkbloom restart`, and `darkbloom doctor` | The standalone commands remain usable; the configured coordinator is retained after setup |
