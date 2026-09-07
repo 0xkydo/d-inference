@@ -1,6 +1,6 @@
 # Test provider onboarding on a Mac
 
-> Last updated: 2026-09-07 · commit `25aa5b0b9`
+> Last updated: 2026-09-07 · commit `f345cad60`
 
 Test the real installer, device enrollment, account linkage, model downloads,
 and background startup on a physical Apple Silicon Mac. Use the reset script
@@ -35,6 +35,23 @@ satisfy that gate. Registering a production candidate is a separate operation.
 ## Steps
 
 ### 1. Build and prepare the signed candidate
+
+First confirm that GitHub Actions has registered the release workflow in the
+fork. Having the YAML file in a branch does not establish that registration:
+
+```bash
+gh api repos/0xkydo/d-inference/actions/workflows \
+  --jq '.workflows[] | select(.path == ".github/workflows/release-swift.yml") | {id, state}'
+```
+
+If this prints nothing, or dispatch reports `workflow not found on the default
+branch`, stop before resetting. The repository owner must make the release
+workflow available to Actions, with its `workflow_dispatch` declaration on the
+default branch. The fork also needs authorized Apple signing/provisioning/
+notarization credentials and access to the workflow's runner labels. Enabling
+Actions alone does not supply those dependencies. Do not create a release tag,
+drop `publish_release=false`, or use an unsigned build as a substitute for this
+signed installation test.
 
 ```bash
 gh workflow run release-swift.yml --repo 0xkydo/d-inference \
