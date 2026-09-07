@@ -110,3 +110,67 @@ func TestResizeSanitizationAndCancellation(t *testing.T) {
 		t.Fatal("Ctrl-C did not quit during operation")
 	}
 }
+
+func TestEnrollmentPollOnlyObservesAndStopsAfterApproval(t *testing.T) {
+	var commands []command
+	m := newModel(func(c command) error { commands = append(commands, c); return nil }, func() backendMessage { return backendMessage{} })
+	m.state = &snapshot{Phase: "enrollment_pending", Revision: 2}
+	_, cmd := m.Update(enrollmentPoll{revision: 2})
+	if cmd == nil {
+		t.Fatal("pending enrollment did not poll")
+	}
+	cmd()
+	if len(commands) != 1 || commands[0].Action != "refresh" {
+		t.Fatalf("unexpected automatic action: %+v", commands)
+	}
+	_, cmd = m.Update(enrollmentPoll{revision: 2})
+	if cmd != nil {
+		t.Fatal("poll overlapped an active action")
+	}
+	m.Update(backendMessage{event: event{Kind: "snapshot", Snapshot: &snapshot{Phase: "account", Revision: 3, Enrolled: true}}})
+	_, cmd = m.Update(enrollmentPoll{revision: 2})
+	if cmd != nil || len(commands) != 1 {
+		t.Fatal("approval automatically opened login or a stale poll ran")
+	}
+	if !strings.Contains(m.View(), "Press Enter to open your browser") {
+		t.Fatal("next action missing")
+	}
+	_, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	cmd()
+	if commands[1].Action != "link" {
+		t.Fatal("explicit account consent missing")
+	}
+}
+
+func TestLayoutKeepsBrandStepsAndActionInsideTerminal(t *testing.T) {
+	for _, phase := range []string{"enrollment", "enrollment_pending", "account", "models", "downloading", "ready", "started"} {
+		for _, size := range []tea.WindowSizeMsg{{Width: 88, Height: 28}, {Width: 42, Height: 16}, {Width: 32, Height: 14}} {
+			m := newModel(func(command) error { return nil }, func() backendMessage { return backendMessage{} })
+			m.state = &snapshot{Phase: phase, Revision: 1}
+			m.Update(size)
+			plain := ansi.Strip(m.View())
+			if !strings.Contains(plain, "DARKBLOOM") {
+				t.Fatal("missing persistent brand")
+			}
+			if !strings.Contains(plain, "q ") {
+				t.Fatalf("missing exit: %s", plain)
+			}
+			lines := strings.Split(plain, "\n")
+			if len(lines) > size.Height {
+				t.Fatalf("%s exceeds %d rows: %d", phase, size.Height, len(lines))
+			}
+			for _, line := range lines {
+				if ansi.StringWidth(line) > size.Width {
+					t.Fatalf("overflow: %q", line)
+				}
+			}
+			if size.Width == 88 {
+				for _, step := range setupSteps {
+					if !strings.Contains(plain, step) {
+						t.Fatal("missing step", step)
+					}
+				}
+			}
+		}
+	}
+}

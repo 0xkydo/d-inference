@@ -5,7 +5,7 @@ set -euo pipefail
 
 reset_usage() {
     cat <<'USAGE'
-Usage: bash scripts/onboarding/reset.sh [--apply] [--cli /path/to/darkbloom]
+Usage: bash scripts/onboarding/reset.sh [--apply] [--all] [--cli /path/to/darkbloom]
                                       [--remove-model org/name ...]
 
 Without --apply: show the plan, change nothing.
@@ -16,6 +16,9 @@ data, and remove installer PATH lines. Shell files get a timestamped backup.
 Models are kept by default. Repeat --remove-model for exact catalog IDs whose
 shared Hugging Face cache you want deleted (including unfinished downloads).
 Other apps using those same models will need to download them again.
+--all removes EVERY models--* folder in the default shared Hugging Face cache,
+including revisions, partials and model locks, plus downloaded Darkbloom
+candidates/bundles/installers. It preserves source, builds and the cleanup tool.
 
 Remove the Darkbloom enrollment profile in System Settings > General > Device
 Management to test first-time enrollment again. Cloud account/history, browser
@@ -36,6 +39,7 @@ reset_model_path() {
 
 reset_check_path() {
     local target=$1 parent
+    [[ ! "$target" =~ [[:cntrl:]] ]] || { reset_fail 'Control characters in removal path.'; return 1; }
     case "$target" in "$reset_home"/*) ;; *) reset_fail "Path is outside your home: $target"; return 1 ;; esac
     # Never follow a symlink in an ancestor. A leaf symlink is only unlinked.
     parent=${target%/*}
@@ -43,6 +47,26 @@ reset_check_path() {
         [ ! -L "$parent" ] || { reset_fail "Symlinked parent requires manual review: $parent"; return 1; }
         parent=${parent%/*}
         [ -n "$parent" ] || parent=/
+    done
+}
+
+reset_full_paths() {
+    local target parent
+    # Validate before globbing: even inventory must not traverse linked caches.
+    for parent in .cache/huggingface/hub .cache/huggingface/hub/.locks Downloads; do
+        reset_check_path "$reset_home/$parent/." || return 1
+    done
+    for target in "$reset_home"/.cache/huggingface/hub/models--* \
+        "$reset_home"/.cache/huggingface/hub/.locks/models--* \
+        "$reset_home"/.cache/huggingface/hub/.darkbloom-locks \
+        "$reset_home"/Downloads/darkbloom-cli-candidate* \
+        "$reset_home"/Downloads/darkbloom-stage-one-* \
+        "$reset_home"/Downloads/darkbloom-bundle*.tar.gz \
+        "$reset_home"/Downloads/Darkbloom-Monitor-*.dmg \
+        "$reset_home"/Downloads/Darkbloom-Enroll-*.mobileconfig; do
+        [ -e "$target" ] || [ -L "$target" ] || continue
+        reset_check_path "$target" || return 1
+        printf '%s\n' "$target"
     done
 }
 
@@ -83,12 +107,13 @@ reset_shell_file() {
 }
 
 reset_main() {
-    local apply=0 cli='' target model_id label rc link_target pid_name
+    local apply=0 all=0 cli='' target model_id label rc link_target pid_name extra_paths
     local reset_home=${HOME:?HOME must be set}
     local paths=() models=() shell_files=()
     while [ "$#" -gt 0 ]; do
         case "$1" in
             --apply) apply=1; shift ;;
+            --all) all=1; shift ;;
             --cli) [ "$#" -ge 2 ] || { reset_usage; return 2; }; cli=$2; shift 2 ;;
             --remove-model) [ "$#" -ge 2 ] || { reset_usage; return 2; }; models+=("$2"); shift 2 ;;
             -h|--help) reset_usage; return 0 ;;
@@ -111,6 +136,12 @@ reset_main() {
     for model_id in "${models[@]+${models[@]}}"; do
         paths+=("$(reset_model_path "$model_id")")
     done
+    if [ "$all" = 1 ]; then
+        extra_paths=$(reset_full_paths) || return 1
+        while IFS= read -r target; do
+            [ -z "$target" ] || paths+=("$target")
+        done <<< "$extra_paths"
+    fi
     for rc in .zshrc .bashrc .bash_profile .profile; do shell_files+=("$reset_home/$rc"); done
     if [ -z "$cli" ]; then
         for target in "$reset_home/.darkbloom/bin/darkbloom" "$reset_home/.darkbloom/Darkbloom.app/Contents/MacOS/darkbloom"; do
@@ -129,7 +160,13 @@ reset_main() {
     printf '\nStop provider/watchdog; uninstall fan helper if present (sudo for that step only).\n'
     printf 'Remove /usr/local/bin/darkbloom only if it points into this user’s install.\n'
     printf 'Clear local identity through darkbloom unenroll; manually remove the MDM profile.\n'
-    printf 'Shared models are kept except for explicitly named --remove-model IDs.\n'
+    if [ "$all" = 1 ]; then
+        printf 'FULL RESET: all default shared model caches and listed Darkbloom downloads are removed.\n'
+        printf 'Other apps sharing these model files will need to download them again.\n'
+        printf 'Source, local builds and the preserved signed cleanup tool stay available.\n'
+    else
+        printf 'Shared models are kept except for explicitly named --remove-model IDs.\n'
+    fi
     [ "$apply" = 1 ] || { printf '\nInventory only. Run again with --apply to execute.\n'; return 0; }
 
     [ -n "$cli" ] && [ -x "$cli" ] || { reset_fail 'A working installed CLI is required for key cleanup; use --cli /path/to/darkbloom.'; return 1; }

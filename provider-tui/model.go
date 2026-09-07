@@ -2,14 +2,23 @@ package main
 
 import (
 	"errors"
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 type sendFailure struct{ err error }
+type enrollmentPoll struct{ revision int }
+
+func checkEnrollmentLater(revision int) tea.Cmd {
+	return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return enrollmentPoll{revision} })
+}
+
 type model struct {
 	state          *snapshot
 	selected       map[string]bool
 	cursor         int
+	bodyScroll     int
 	expanded       bool
 	width, height  int
 	busy, quitting bool
@@ -46,6 +55,10 @@ func (m *model) action(action string, ids []string) tea.Cmd {
 }
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case enrollmentPoll:
+		if !m.quitting && !m.busy && m.state != nil && m.state.Phase == "enrollment_pending" && m.state.Revision == msg.revision {
+			return m, m.action("refresh", nil)
+		}
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -64,6 +77,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "snapshot":
 			if m.state != nil && e.Snapshot.Revision <= m.state.Revision {
 				return m, m.nextEvent()
+			}
+			if m.state == nil || m.state.Phase != e.Snapshot.Phase {
+				m.bodyScroll = 0
 			}
 			m.state = e.Snapshot
 			m.busy = m.state.Phase == "downloading"
@@ -91,6 +107,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.busy = false
 			m.problem = errorText(*e.Error)
 		}
+		if e.Kind == "snapshot" && m.state.Phase == "enrollment_pending" {
+			return m, tea.Batch(m.nextEvent(), checkEnrollmentLater(m.state.Revision))
+		}
 		return m, m.nextEvent()
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -111,7 +130,16 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.state == nil {
 			return m, nil
 		}
+		if msg.String() == "pgdown" {
+			m.bodyScroll += 3
+		}
+		if msg.String() == "pgup" {
+			m.bodyScroll = max(0, m.bodyScroll-3)
+		}
 		rows := m.visible()
+		if m.state.Phase == "enrollment_pending" && msg.String() == "o" {
+			return m, m.action("enroll", nil)
+		}
 		if m.state.Phase == "models" {
 			switch msg.String() {
 			case "up", "k":

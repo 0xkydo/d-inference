@@ -6,7 +6,6 @@ import (
 	"unicode"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
 )
 
 var bold = lipgloss.NewStyle().Bold(true)
@@ -27,7 +26,7 @@ func (m *model) View() string {
 	if m.quitting {
 		return ""
 	}
-	if m.width < 24 || m.height < 10 {
+	if m.width < 32 || m.height < 14 {
 		return "Enlarge the terminal.\nq / Ctrl-C to quit"
 	}
 	title := "Darkbloom"
@@ -47,16 +46,17 @@ func (m *model) View() string {
 			footer = "Enter open device enrollment · q quit"
 		case "enrollment_pending":
 			title = "1. Complete enrollment in macOS"
-			body = "In System Settings → General → Device Management, select the Darkbloom profile and click Install or Enroll. Follow the macOS prompts.\n\nAfter clicking OK, return here. Darkbloom checks the actual macOS enrollment before continuing."
-			footer = "Enter check enrollment · q quit"
+			body = bold.Render("Finish the approval in System Settings.") + "\n\nOpen General → Device Management, select the Darkbloom profile and click Install or Enroll. Follow the macOS prompts.\n\n" +
+				"You can leave this terminal open. We'll detect the installed profile and take you to account linkage automatically.\n\nIf the profile is missing, press o to reopen it."
+			footer = "Checking enrollment automatically… · Enter check now · o reopen profile · q quit"
 		case "account":
 			title = "2. Link your account"
-			body = success.Render("Device enrollment confirmed locally.") + "\n\nLink this Mac to your Darkbloom account to receive earnings for serving inference. Your browser will open for approval."
-			footer = "Enter open account linkage · q quit"
+			body = success.Render("✓ Device enrollment confirmed locally.") + "\n\n" + bold.Render("Next: connect your Darkbloom account.") + "\n\nLink this Mac to receive earnings for serving inference.\nYour browser will open so you can approve this Mac."
+			footer = "Press Enter to open your browser · q finish later"
 		case "models":
 			title = "3. Choose models to download"
 			body, focusLine = m.modelList()
-			footer = "↑↓ move · Space select · h additional · Enter confirm · q quit"
+			footer = "Enter download selection · ↑↓ move · Space select · h additional · q quit"
 		case "downloading":
 			title = "4. Download and verify"
 			body = "Your selected models are being downloaded and verified.\n\nClosing this terminal cancels downloads. Completed and partial files are kept for resume."
@@ -103,87 +103,8 @@ func (m *model) View() string {
 			body += " · verification follows transfer"
 		}
 	}
-	if m.busy && (m.state == nil || m.state.Phase != "downloading") {
+	if m.busy && (m.state == nil || (m.state.Phase != "downloading" && m.state.Phase != "enrollment_pending")) {
 		footer = "Working… · q / Ctrl-C cancel"
 	}
-	if m.problem != "" {
-		footer = failure.Render(clean(m.problem)) + "\n" + footer
-	}
-	width := m.width - 4
-	header := bold.Render(title) + "\n\n"
-	footer = ansi.Wrap(footer, width, "")
-	lines := strings.Split(ansi.Wrap(body, width, ""), "\n")
-	available := max(1, m.height-5-strings.Count(footer, "\n"))
-	if len(lines) > available {
-		first := 0
-		if focusLine >= 0 {
-			// Find the actual focused rendered row after wrapping for this terminal.
-			for i, line := range lines {
-				if strings.HasPrefix(line, "›") {
-					focusLine = i
-					break
-				}
-			}
-			first = min(max(0, focusLine-available/2), len(lines)-available)
-		} else if m.code != nil || m.progress != nil {
-			first = len(lines) - available
-		}
-		lines = lines[first : first+available]
-	}
-	return header + strings.Join(lines, "\n") + "\n\n" + footer
-}
-func (m *model) modelList() (string, int) {
-	lines := []string{fmt.Sprintf("%.0f GiB total RAM · %.1f GiB model budget", m.state.MemoryGiB, m.state.BudgetGiB),
-		"Fit estimates each model separately; running apps still matter when loading.", ""}
-	group := ""
-	focused := -1
-	for i, row := range m.visible() {
-		next := "Available to download"
-		if row.Downloaded {
-			next = "Downloaded"
-		} else if row.FitReason != nil {
-			next = "Additional models"
-		}
-		if next != group {
-			lines = append(lines, bold.Render(next))
-			group = next
-			if next == "Additional models" {
-				lines = append(lines, "These may not fit or require different hardware. Downloading does not enable serving.")
-			}
-		}
-		cursor, mark := " ", " "
-		if i == m.cursor {
-			cursor = "›"
-			focused = len(lines)
-		}
-		if m.selected[row.ID] {
-			mark = "x"
-		}
-		line := fmt.Sprintf("%s [%s] %s · %.1f GB", cursor, mark, clean(row.Name), row.SizeGB)
-		if row.Resumable {
-			line += " · resume"
-		}
-		lines = append(lines, line)
-		if row.FitReason != nil {
-			lines = append(lines, "    "+clean(*row.FitReason))
-		}
-	}
-	hidden, count := 0, 0
-	size := 0.0
-	for _, row := range m.state.Models {
-		if !row.Downloaded && row.FitReason != nil {
-			hidden++
-		}
-		if m.selected[row.ID] {
-			count++
-			if !row.Downloaded {
-				size += row.SizeGB
-			}
-		}
-	}
-	if hidden > 0 {
-		lines = append(lines, fmt.Sprintf("h show/hide %d additional models", hidden))
-	}
-	lines = append(lines, fmt.Sprintf("%d selected · %.1f GB to download", count, size))
-	return strings.Join(lines, "\n"), focused
+	return m.renderPage(title, body, footer, focusLine)
 }

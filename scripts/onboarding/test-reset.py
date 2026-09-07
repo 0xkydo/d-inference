@@ -40,6 +40,35 @@ class ResetTests(unittest.TestCase):
             result = self.run_shell('reset_model_path "$1"', model)
             self.assertNotEqual(result.returncode, 0, model)
 
+    def test_full_reset_inventory_then_removal_in_disposable_home(self):
+        remove = [".cache/huggingface/hub/models--org--model/snapshots/v1/weights",
+                  ".cache/huggingface/hub/models--short-id/snapshots/.staging/weights.part",
+                  ".cache/huggingface/hub/.locks/models--org--model/file.lock",
+                  ".cache/huggingface/hub/.darkbloom-locks/file.lock",
+                  "Downloads/darkbloom-cli-candidate-123/bundle.tar.gz",
+                  "Downloads/Darkbloom-Monitor-v1.dmg"]
+        keep = [".cache/huggingface/token", ".cache/huggingface/hub/datasets--org--data/data",
+                "Downloads/personal.txt", "source/provider-swift/.build/debug/darkbloom",
+                ".local/share/darkbloom-onboarding-reset/Darkbloom.app/helper"]
+        for name in remove + keep:
+            path = self.root / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_text("fixture")
+        plan = self.run_shell('reset_full_paths')
+        self.assertEqual(plan.returncode, 0, plan.stderr)
+        self.assertTrue(all((self.root / name).exists() for name in remove + keep))
+        result = self.run_shell('plan=$(reset_full_paths); while IFS= read -r path; do reset_remove_path "$path"; done <<< "$plan"')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(all(not (self.root / name).exists() for name in remove))
+        self.assertTrue(all((self.root / name).exists() for name in keep))
+
+    def test_full_reset_rejects_linked_cache_parent(self):
+        outside = self.root / "unrelated"; outside.mkdir()
+        (outside / "models--keep").mkdir()
+        cache = self.root / ".cache/huggingface"; cache.mkdir(parents=True)
+        (cache / "hub").symlink_to(outside)
+        result = self.run_shell('reset_full_paths')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue((outside / "models--keep").exists())
+
     def test_symlink_parent_refused_and_leaf_only_unlinked(self):
         outside = self.root / "unrelated"
         outside.mkdir()

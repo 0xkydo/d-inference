@@ -212,7 +212,12 @@ class TerminalTests(FixtureTestCase):
             wait('1. Enroll this Mac')
             self.assertNotIn('enroll\n', self.actions())
             os.write(master, b'\r'); wait('Complete enrollment')
-            os.write(master, b'\r'); wait('Link your account')
+            if mode == 'auto':
+                # Fixture enrollment is now approved. No terminal key may be
+                # required to notice it, and login must remain behind Enter.
+                wait('Link your account')
+            else:
+                os.write(master, b'\r'); wait('Link your account')
             self.assertNotIn('link\n', self.actions())
             os.write(master, b'\r'); wait('Choose models')
             fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 16, 42, 0, 0))
@@ -254,6 +259,7 @@ class TerminalTests(FixtureTestCase):
     def test_pty_resize_and_quit_restore_terminal(self): self.run_terminal('quit')
     def test_pty_ctrl_c_cancels_download(self): self.run_terminal('cancel')
     def test_pty_hangup_closes_session(self): self.run_terminal('eof')
+    def test_pty_approval_advances_without_opening_login(self): self.run_terminal('auto')
 
 
 if __name__ == '__main__':
