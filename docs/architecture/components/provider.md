@@ -1,6 +1,6 @@
 # Provider process
 
-> Last updated: 2026-09-03 · commit `5d400cf75`
+> Last updated: 2026-09-07 · commit `25aa5b0b9`
 
 The provider is the Apple Silicon Mac that decrypts prompts and runs inference.
 It ships as one Swift package (`provider-swift/`) producing the `darkbloom` CLI,
@@ -120,3 +120,10 @@ flowchart LR
 - [`../security/encryption.md`](../security/encryption.md), [`../../provider/attestation.md`](../../provider/attestation.md)
 - [`coordinator.md`](coordinator.md) — the other side of the WebSocket
 - [`../../provider/cli-reference.md`](../../provider/cli-reference.md), [`../../provider/fan-control.md`](../../provider/fan-control.md)
+
+## Opt-in onboarding frontend
+
+`darkbloom start --tui` runs a bundled Bubble Tea companion against a foreground
+Swift onboarding session. The [session architecture](provider-onboarding.md)
+describes its typed commands, consent gates, download cancellation, and shared
+launch sequence. Serving retains its existing independent lifetime.

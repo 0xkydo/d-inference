@@ -1,6 +1,6 @@
 # Provider CLI reference
 
-> Last updated: 2026-09-05 · commit `94c7c31eb`
+> Last updated: 2026-09-07 · commit `25aa5b0b9`
 
 Reference for the `darkbloom` command-line tool: every subcommand and flag, the
 files and identifiers it creates, the `provider.toml` keys it reads with their
@@ -42,7 +42,7 @@ Declaration order of `Darkbloom.configuration.subcommands` (21):
 | `benchmark` | Inference benchmarks and harnesses | ✓ | `BenchmarkCommand.swift` (`Benchmark`) |
 | `update` | Self-update | ✓ | `UpdateCommand.swift` (`Update`) |
 | `verify` | `doctor --strict` | ✓ | `VerifyCommand.swift` (`Verify`) |
-| `enroll` | Fetch and open the MDM enrollment profile | ✓ | `EnrollCommand.swift` (`Enroll`) |
+| `enroll` | Fetch/open the read-only MDM profile and check enrollment interactively | ✓ | `EnrollCommand.swift` (`Enroll`) |
 | `unenroll` | Open System Settings to remove the profile; delete local data | | `UnenrollCommand.swift` (`Unenroll`) |
 | `logs` | Unified logs for subsystem `dev.darkbloom.provider` | | `LogsCommand.swift` (`Logs`) |
 | `report` | Upload recent unified logs to the coordinator | ✓ | `ReportCommand.swift` (`Report`) |
@@ -57,6 +57,8 @@ Declaration order of `Darkbloom.configuration.subcommands` (21):
 | Flag | Type | Default | Effect |
 |---|---|---|---|
 | `--coordinator-url <url>` | `String?` | `coordinator.url` (`wss://api.darkbloom.dev/ws/provider`) | Override the coordinator WebSocket URL |
+| `--tui` | flag | `false` | Opt-in Bubble Tea onboarding through the bundled companion; requires a terminal and excludes serving/model/idle-timeout overrides |
+| `--onboarding` | flag | `false` | Explicit first-time setup; terminal required. The installer passes this; ordinary interactive `start` resumes pending setup automatically |
 | `--model <id>` | `[String]`, repeatable | `[]` | Serve exactly these models; skips the picker |
 | `--all` | flag | `false` | Serve every local model the runtime supports; skips the picker |
 | `--idle-timeout <mins>` | `UInt64?` | `backend.idle_timeout_mins` (`60`) | Override the idle unload timeout for this run |
@@ -66,6 +68,16 @@ Declaration order of `Darkbloom.configuration.subcommands` (21):
 | `--port <n>` | `UInt16` | `8000` | Local server port |
 | `--bind <addr>` | `String` | `127.0.0.1` | Local server bind address |
 | `--no-auth` | flag | `false` | Disable the local bearer-token check |
+
+First-time interactive starts and unfinished setup run enrollment, account
+linkage, a model picker, downloads, then **Press Enter to start Darkbloom**.
+The picker groups downloaded models, likely fits based on total RAM and shared
+reserves, and expandable additional models. Additional models are download-only
+and are excluded from the service selection. Runtime load admission still checks
+available memory. `q`, Ctrl-C, Ctrl-D, and EOF stop the picker without launching.
+Explicit `--model`/`--all`, foreground, local modes, and noninteractive starts
+retain their existing behavior. `--onboarding` cannot be combined with those
+serving-mode/model overrides. First-time setup keeps the current idle policy.
 
 Exit 1 (`ExitCode.failure`) when `--local` and `--local-endpoint` are combined,
 a debugger is attached, RAM is below 8 GB, Metal is unavailable, hardware
@@ -600,6 +612,13 @@ darkbloom unenroll [--force] [--no-open]
 | `--force` | Skip the local-data cleanup confirmation |
 | `--no-open` | Do not open System Settings |
 
+Local cleanup removes account state, legacy files, both attestation-key labels,
+and the wrapped cache key. It reports any failed removal and exits nonzero so
+an installer/reset script can preserve the executable for a retry
+(`provider-swift/Sources/ProviderCore/Auth/LocalDataCleanup.swift`, `purge`).
+It does not stop the provider or uninstall the app. For a complete test-machine
+reset, use [the reset procedure](../developer/onboarding-test.md).
+
 ## `darkbloom local`
 
 Print the local (direct-mode) OpenAI endpoint URL and API key.
@@ -774,3 +793,14 @@ automatic updates with `darkbloom autoupdate disable`.
 
 
 GPT-OSS benchmark and foreground execution supports the [performance controls](../reference/configuration.md#gpt-oss-performance-controls). The full-projection and kernel rollback modes support paired comparisons with identical request inputs.
+
+## Bubble Tea onboarding
+
+`darkbloom start --tui` opts in; ordinary `start` retains the plain interface.
+The installer accepts `--tui` for first-time interactive handoff, and keeps
+completed-install updates and `--install-only` out of onboarding. Missing or
+incompatible companions fail with instructions to use the plain CLI.
+See the [session contract](../architecture/components/provider-onboarding.md)
+for consent and cancellation behavior, and [Mac testing](../developer/onboarding-test.md)
+for human-operated commands. The private `onboarding-session` command requires
+pipes and is not a general management or inference API.

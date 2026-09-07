@@ -49,6 +49,7 @@ struct Darkbloom: AsyncParsableCommand {
             Fan.self,
             Watchdog.self,
             RuntimeSmoke.self,
+            OnboardingSessionCommand.self,
         ]
     )
 
@@ -140,7 +141,7 @@ func loadRuntimeSnapshot(
     // Serving/operator commands migrate stale config values. Benchmarking is
     // read-only: measurement must never rewrite the input half of an A/B pair.
     if migrateOnDisk {
-        config = migrateConfigIfNeeded(configPath: configPath, config: config)
+        config = migrateConfigIfNeeded(configPath: configPath, config: config, migrateLegacyPath: rawPath == nil)
     }
 
     let models = hardware.map { ModelScanner.scanModels(hardwareInfo: $0) } ?? []
@@ -164,74 +165,38 @@ private func resolveConfigPath(_ rawPath: String?) throws -> URL {
 
 // MARK: - Config Migration
 
-/// Production coordinator WebSocket URL.
-private let productionCoordinatorURL = "wss://api.darkbloom.dev/ws/provider"
-
-/// Stale coordinator URLs to rewrite, ordered longest-first so a
-/// `/ws/provider`-suffixed variant is replaced before its bare host form.
-private let staleCoordinatorURLs: [(pattern: String, label: String)] = [
-    ("ws://localhost:8080/ws/provider", "localhost"),
-    ("http://localhost:8080/ws/provider", "localhost"),
-    ("wss://api.dev.darkbloom.xyz/ws/provider", "api.dev.darkbloom.xyz"),
-    ("ws://localhost:8080", "localhost"),
-    ("http://localhost:8080", "localhost"),
-    ("wss://api.dev.darkbloom.xyz", "api.dev.darkbloom.xyz"),
-]
-
-/// Migrate stale config values in-place. Runs on every startup; idempotent.
-///
-/// 1. **Legacy path**: if the resolved config lives at a non-canonical path
-///    and `~/.config/darkbloom/provider.toml` does not exist yet, copy the
-///    file there (keeping the old one for backward compat).
-/// 2. **Coordinator URL**: if the TOML text contains a known stale
-///    coordinator URL (localhost, dev), rewrite it to production in-place.
-/// 3. **Schema migration**: bring `config_version` up to date, applying the
-///    generated-value migrations selected by the old stamp.
-func migrateConfigIfNeeded(configPath: URL, config: ProviderConfig) -> ProviderConfig {
+/// Migrate discovered legacy config paths and generated schema defaults.
+/// Explicit --config files stay isolated. Coordinator URLs are user choices:
+/// localhost and the dev coordinator must never be silently redirected to prod.
+func migrateConfigIfNeeded(
+    configPath: URL,
+    config: ProviderConfig,
+    migrateLegacyPath: Bool = true,
+    home: URL = FileManager.default.homeDirectoryForCurrentUser
+) -> ProviderConfig {
     let fm = FileManager.default
     guard fm.fileExists(atPath: configPath.path) else { return config }
+    let canonicalPath = home.appendingPathComponent(".config/darkbloom/provider.toml")
+    let legacyPaths = [
+        "Library/Application Support/darkbloom/provider.toml",
+        ".config/eigeninference/provider.toml",
+        "Library/Application Support/eigeninference/provider.toml",
+    ].map { home.appendingPathComponent($0).standardizedFileURL }
 
-    let home = fm.homeDirectoryForCurrentUser
-    let canonicalPath = home
-        .appendingPathComponent(".config")
-        .appendingPathComponent("darkbloom")
-        .appendingPathComponent("provider.toml")
-
-    // --- 1. Legacy path → canonical path copy ---
     var copiedToCanonical = false
-    if configPath.standardizedFileURL != canonicalPath.standardizedFileURL
-        && !fm.fileExists(atPath: canonicalPath.path) {
+    if migrateLegacyPath, legacyPaths.contains(configPath.standardizedFileURL),
+       !fm.fileExists(atPath: canonicalPath.path) {
         do {
-            let dir = canonicalPath.deletingLastPathComponent()
-            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            try fm.createDirectory(at: canonicalPath.deletingLastPathComponent(), withIntermediateDirectories: true)
             try fm.copyItem(at: configPath, to: canonicalPath)
             copiedToCanonical = true
             printError("  Migrated config to \(canonicalPath.path)")
         } catch {
-            // best-effort; don't block startup
+            // Best-effort; the resolved source config is still usable.
         }
     }
 
-    // --- 2. Coordinator URL migration ---
-    var didMigrateURL = false
-    var migratedLabel: String?
-
-    // Migrate the file we loaded from.
-    if let label = rewriteStaleURLs(in: configPath) {
-        didMigrateURL = true
-        migratedLabel = label
-    }
-
-    // If we just copied to canonical, fix URLs there too so the next
-    // startup (which will resolve to canonical first) is already clean.
-    if copiedToCanonical {
-        if let label = rewriteStaleURLs(in: canonicalPath) {
-            didMigrateURL = true
-            migratedLabel = migratedLabel ?? label
-        }
-    }
-
-    // --- 3. config_version migration (+ generated defaults) ---
+    // config_version migration (+ generated defaults).
     // Runs on any out-of-date file, even one whose generated values need no
     // change. The stamp is what lets a LATER hand-edit stick instead of being
     // migrated again on the next boot. Decode-time migration already changed
@@ -251,41 +216,7 @@ func migrateConfigIfNeeded(configPath: URL, config: ProviderConfig) -> ProviderC
                 + "re-set it to keep the old value)")
     }
 
-    if didMigrateURL {
-        let source = migratedLabel ?? "stale URL"
-        printError("  Migrated coordinator URL from \(source) to api.darkbloom.dev")
-        var updated = config
-        updated.coordinator.url = productionCoordinatorURL
-        return updated
-    }
-
     return config
-}
-
-/// Replace stale coordinator URLs in a TOML file via string replacement.
-/// Returns the human-readable label of the matched pattern, or `nil` if
-/// the file was already clean.
-private func rewriteStaleURLs(in path: URL) -> String? {
-    guard var content = try? String(contentsOf: path, encoding: .utf8) else {
-        return nil
-    }
-
-    var matched: String?
-    for (old, label) in staleCoordinatorURLs {
-        if content.contains(old) {
-            content = content.replacingOccurrences(of: old, with: productionCoordinatorURL)
-            matched = label
-        }
-    }
-
-    guard let matched else { return nil }
-
-    do {
-        try content.write(to: path, atomically: true, encoding: .utf8)
-        return matched
-    } catch {
-        return nil
-    }
 }
 
 /// Bring a `provider.toml`'s `config_version` up to date on disk, applying the
@@ -294,8 +225,7 @@ private func rewriteStaleURLs(in path: URL) -> String? {
 /// was needed. An already-current or unreadable file is left untouched, so
 /// each migration runs at most once per config.
 ///
-/// Text surgery rather than `ConfigManager.save`, for the same reason
-/// `rewriteStaleURLs` is: a `TOMLEncoder` round-trip would drop the
+/// Text surgery rather than `ConfigManager.save`: a TOML round-trip drops the
 /// operator's comments AND their retired `[backend]` keys, and startup still
 /// needs those keys present in order to warn about them.
 ///
@@ -303,10 +233,7 @@ private func rewriteStaleURLs(in path: URL) -> String? {
 /// changes in `ProviderConfig.init(from:)`; the two representations must not
 /// disagree before the new stamp spends the old schema evidence.
 ///
-/// Internal rather than `private` (unlike `rewriteStaleURLs`) so
-/// `DarkbloomCLITests` can drive it over a temp file: it edits an operator's
-/// config in place, and `migrateConfigIfNeeded` cannot be exercised directly
-/// without its legacy-path branch writing into the real `~/.config`.
+/// Internal so tests can exercise schema changes over temporary files.
 func migrateConfigSchema(in path: URL) -> [ConcurrencyMigrationStep] {
     guard let content = try? String(contentsOf: path, encoding: .utf8),
         let outcome = ConcurrencyDefaultMigration.migrate(content: content)

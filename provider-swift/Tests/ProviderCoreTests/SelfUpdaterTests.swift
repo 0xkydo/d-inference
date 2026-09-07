@@ -433,6 +433,9 @@ struct SelfUpdaterTests {
         try fm.copyItem(
             at: metallib,
             to: appMacOS.appendingPathComponent("mlx.metallib"))
+        let companion = appMacOS.appendingPathComponent("darkbloom-tui")
+        try fm.copyItem(at: debugBuildProduct("darkbloom-tui"), to: companion)
+        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: companion.path)
         let stagedFanHelper = helpers.appendingPathComponent("darkbloom-fan-helper")
         if includeFanHelper {
             try fm.copyItem(at: fanHelper, to: stagedFanHelper)
@@ -459,6 +462,7 @@ struct SelfUpdaterTests {
             to: capability.appendingPathComponent("paged-kernel-v1"))
         try Data("1\n".utf8).write(
             to: capability.appendingPathComponent("fan-helper-v1"))
+        try Data("1\n".utf8).write(to: capability.appendingPathComponent("onboarding-session-v1"))
         if includeResource {
             let builtBundle = try debugBuildProduct(
                 PackagedRuntimeSmoke.mlxLMCommonBundleName)
@@ -469,6 +473,7 @@ struct SelfUpdaterTests {
                     isDirectory: true))
         }
 
+        try runTestProcess("/usr/bin/codesign", ["--force", "--sign", "-", "--identifier", "io.darkbloom.onboarding", companion.path])
         if includeFanHelper {
             try runTestProcess(
                 "/usr/bin/codesign",

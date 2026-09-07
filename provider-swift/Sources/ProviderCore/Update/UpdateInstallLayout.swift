@@ -353,6 +353,7 @@ extension UpdateRecoveryStore {
                 deep: layout == .app
             )
             if layout == .app {
+                try OnboardingCompanionVerifier.verify(app: bundle, executable: binary, signaturePolicy: .darkbloomProduction)
                 try FanHelperCapabilityVerifier.verify(
                     app: bundle,
                     executable: binary,

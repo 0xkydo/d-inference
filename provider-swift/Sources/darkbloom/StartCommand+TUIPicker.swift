@@ -1,208 +1,113 @@
-// Start TUI model picker: raw-mode terminal multi-select rendering + input loop.
+// Interactive disclosure and multi-selection. The result is download intent.
 import Foundation
 import ArgumentParser
 import ProviderCore
-#if canImport(Darwin)
 import Darwin
-#endif
 
 extension Start {
-    // MARK: - TUI Model Picker
-
-    /// Interactive multi-select model picker using raw terminal mode.
-    /// Arrow keys navigate, Space toggles selection, Enter confirms, Esc/q cancels.
-    /// Enforces memory budget and shows two sections: downloaded and available.
-    internal func runModelPicker(entries: [PickerEntry], memoryGb: Double) throws -> [Int] {
-        let budget = memoryGb - Start.pickerOSReserveGb
-
-        var cursorPos = 0
-        var selected = [Bool](repeating: false, count: entries.count)
-
-        let downloadedCount = entries.filter(\.downloaded).count
-        let availableCount = entries.count - downloadedCount
-
-        // Enable raw terminal mode.
-        var oldTermios = termios()
-        tcgetattr(STDIN_FILENO, &oldTermios)
-        var raw = oldTermios
-        raw.c_lflag &= ~UInt(ECHO | ICANON | ISIG)
-        raw.c_cc.16 = 1  // VMIN = 1 byte minimum
-        raw.c_cc.17 = 0  // VTIME = no timeout
-        tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw)
-
-        // Ensure terminal is restored on any exit path.
-        defer {
-            // Show cursor, restore terminal.
-            write(STDOUT_FILENO, "\u{1B}[?25h", 6)
-            tcsetattr(STDIN_FILENO, TCSAFLUSH, &oldTermios)
-        }
-
-        // Hide cursor.
-        write(STDOUT_FILENO, "\u{1B}[?25l", 6)
-
-        var lastLineCount: Int = 0
-
-        let ansiReset = "\u{1B}[0m"
-        let ansiDim = "\u{1B}[2m"
-        let ansiYellow = "\u{1B}[33m"
-
-        func formattedGB(_ value: Double) -> String {
-            String(format: "%.1f", value)
-        }
-
-        func canFitIndividually(_ entry: PickerEntry) -> Bool {
-            Start.modelFitsBudget(sizeGb: entry.sizeGb, memoryGb: memoryGb)
-        }
-
-        // Pre-select the largest downloaded model that can fit on this machine.
-        if let idx = entries.firstIndex(where: { $0.downloaded && canFitIndividually($0) }) {
-            selected[idx] = true
-        }
-
-        /// Render the picker UI, returning the number of lines written.
-        func render(pos: Int, sel: [Bool], prevLines: Int) -> Int {
-            var output = ""
-
-            // Move cursor up to overwrite previous render.
-            if prevLines > 0 {
-                output += "\u{1B}[\(prevLines)A"
-            }
-            // Carriage return + clear to end of screen.
-            output += "\r\u{1B}[J"
-
-            let used: Double = entries.enumerated()
-                .filter { sel[$0.offset] }
-                .map(\.element.sizeGb)
-                .reduce(0, +)
-            let count = sel.filter { $0 }.count
-            let fitsSimultaneously = used <= budget
-
-            var lines = 0
-
-            output += "  Select models (RAM: \(Int(memoryGb)) GB)  \u{2191}\u{2193} navigate \u{00B7} Space toggle \u{00B7} Enter confirm\r\n"
-            lines += 1
-
-            if fitsSimultaneously {
-                output += "  \(ansiDim)\(count) selected \u{00B7} \(formattedGB(used)) GB total \u{00B7} all models can be served simultaneously\(ansiReset)\r\n\r\n"
-            } else {
-                output += "  \(ansiDim)\(count) selected \u{00B7} \(formattedGB(used)) GB on disk \u{00B7} \(ansiReset)\(ansiYellow)one model active at a time (swap on demand)\(ansiReset)\r\n\r\n"
-            }
-            lines += 2
-
-            var idx = 0
-
-            // Section 1: Downloaded models.
-            if downloadedCount > 0 {
-                output += "  \u{1B}[1mReady to serve:\u{1B}[0m\r\n"
-                lines += 1
-                for entry in entries where entry.downloaded {
-                    let arrow = idx == pos ? "\u{25B8}" : " "
-                    let check = sel[idx] ? "\u{2713}" : " "
-                    let highlight = idx == pos ? "\u{1B}[36m" : ""
-                    let reset = highlight.isEmpty ? "" : "\u{1B}[0m"
-                    // A downloaded model that exceeds this box's budget is shown
-                    // (it IS on disk) but flagged "won't fit" — never hidden.
-                    let warn = canFitIndividually(entry) ? "" : " \u{26A0} won't fit"
-                    output += "    \(highlight)\(arrow) [\(check)] \(entry.displayName) (\(formattedGB(entry.sizeGb)) GB)\(warn)\(reset)\r\n"
-                    lines += 1
-                    idx += 1
-                }
-            }
-
-            // Section 2: Not-downloaded models.
-            if availableCount > 0 {
-                if downloadedCount > 0 {
-                    output += "\r\n"
-                    lines += 1
-                }
-                output += "  \u{1B}[1mAvailable to download:\u{1B}[0m\r\n"
-                lines += 1
-                for entry in entries where !entry.downloaded {
-                    let arrow = idx == pos ? "\u{25B8}" : " "
-                    let check = sel[idx] ? "\u{2713}" : " "
-                    let tooLargeForMachine = !canFitIndividually(entry)
-                    let highlight: String
-                    if idx == pos {
-                        highlight = "\u{1B}[33m"
-                    } else if tooLargeForMachine {
-                        highlight = "\u{1B}[2;31m"
-                    } else {
-                        highlight = "\u{1B}[2m"
-                    }
-                    let note: String
-                    if entry.resumable {
-                        note = tooLargeForMachine ? " \u{21BB} resuming \u{00B7} \u{26A0} exceeds RAM" : " \u{21BB} resuming"
-                    } else {
-                        note = tooLargeForMachine ? " \u{26A0} exceeds RAM" : ""
-                    }
-                    output += "    \(highlight)\(arrow) [\(check)] \u{2193} \(entry.displayName) (\(formattedGB(entry.sizeGb)) GB)\(note)\u{1B}[0m\r\n"
-                    lines += 1
-                    idx += 1
-                }
-            }
-
-            // Write the full frame in one syscall.
-            output.withCString { ptr in
-                _ = write(STDOUT_FILENO, ptr, strlen(ptr))
-            }
-
-            return lines
-        }
-
-        // Initial render.
-        lastLineCount = render(pos: cursorPos, sel: selected, prevLines: 0)
-
-        // Input loop.
-        var buf = [UInt8](repeating: 0, count: 3)
+    internal func runModelPicker(
+        entries: [PickerEntry], memoryGb: Double, budgetGiB: Double,
+        initialIDs: Set<String> = []
+    ) throws -> [Int] {
+        var selected = Set(entries.indices.filter { initialIDs.contains(entries[$0].id) })
+        var expanded = selected.contains { entries[$0].fitReason != nil && !entries[$0].downloaded }
+        var cursor = 0
+        var note = ""
+        let interactive = OnboardingUI.isTerminal && ProcessInfo.processInfo.environment["TERM"] != "dumb"
+        let terminalMode = interactive ? PickerTerminalMode() : nil
+        if interactive && terminalMode == nil { throw ExitCode.failure }
+        defer { terminalMode?.restore() }
+        var previousRows = 0
+        var previousWidth = 0
+        var previousHeight = 0
         while true {
-            let n = read(STDIN_FILENO, &buf, 3)
-            guard n > 0 else { continue }
-
-            if n == 1 {
-                switch buf[0] {
-                case 0x1B:
-                    // Bare Escape — cancel.
-                    print()
-                    return []
-                case 0x71: // 'q'
-                    print()
-                    return []
-                case 0x20: // Space — toggle selection.
-                    if selected[cursorPos] {
-                        selected[cursorPos] = false
-                    } else {
-                        // Allow selection if the model individually fits in memory.
-                        // Multiple models can be selected even if their total exceeds
-                        // available RAM — only one will be warm (loaded) at a time;
-                        // the coordinator manages model swaps on demand.
-                        if canFitIndividually(entries[cursorPos]) {
-                            selected[cursorPos] = true
-                        }
-                    }
-                case 0x0A, 0x0D: // Enter — confirm.
-                    if selected.contains(true) {
-                        print()
-                        return selected.enumerated()
-                            .filter(\.element)
-                            .map(\.offset)
-                    }
-                    // Don't allow confirm with nothing selected.
-                default:
-                    break
-                }
-            } else if n == 3, buf[0] == 0x1B, buf[1] == 0x5B {
-                // Arrow key escape sequence: ESC [ A/B/C/D
-                switch buf[2] {
-                case 0x41: // Up
-                    if cursorPos > 0 { cursorPos -= 1 }
-                case 0x42: // Down
-                    if cursorPos < entries.count - 1 { cursorPos += 1 }
-                default:
-                    break
-                }
+            let visible: [Int] = Self.pickerGroups(entries: entries).prefix(expanded ? 3 : 2).flatMap { $0.1 }
+            cursor = max(0, min(cursor, visible.count - 1))
+            let focused: Int? = visible.isEmpty ? nil : visible[cursor]
+            let lines = Self.pickerLines(entries: entries, memoryGb: memoryGb, budgetGiB: budgetGiB,
+                                         selected: selected, expanded: expanded, focused: focused)
+            var rows: [String] = lines.flatMap { OnboardingUI.wrapped($0) }
+            rows.append(note)
+            var size = winsize()
+            _ = ioctl(STDOUT_FILENO, TIOCGWINSZ, &size)
+            let height = Int(size.ws_row) > 0 ? Int(size.ws_row) : 24
+            // Keep controls visible and scroll the body around the focused row.
+            let limit = max(8, height - 2)
+            if interactive && rows.count > limit {
+                let focus = rows.firstIndex { $0.hasPrefix("›") } ?? 3
+                let bodyCount = max(1, limit - 7)
+                let first = min(max(3, focus - bodyCount / 2), max(3, rows.count - 4 - bodyCount))
+                rows = Array(rows.prefix(3)) + Array(rows[first..<min(first + bodyCount, rows.count - 4)])
+                    + Array(rows.suffix(4))
             }
-
-            lastLineCount = render(pos: cursorPos, sel: selected, prevLines: lastLineCount)
+            if interactive && previousRows > 0 && previousWidth == OnboardingUI.width && previousHeight == height {
+                print("\u{1B}[\(previousRows)A\r\u{1B}[J", terminator: "")
+            }
+            for row in rows {
+                let heading = ["Choose models to download", "Downloaded", "Available to download", "Additional models"].contains(row)
+                let action = row.hasPrefix("›") || row.hasPrefix("▸") || row.hasPrefix("▾")
+                let detail = row.contains("total RAM ·") || row.hasPrefix("Fit uses") || row.contains("show/hide")
+                let code = heading || action ? "1" : detail ? "2" : nil
+                print("  " + (code.map { OnboardingUI.style(row, $0) } ?? row))
+            }
+            fflush(stdout)
+            previousRows = rows.count; previousWidth = OnboardingUI.width; previousHeight = height
+            note = ""
+            if !interactive {
+                print("  Numbers separated by commas (or all), h to show/hide, q to quit: ", terminator: "")
+                fflush(stdout)
+                guard let input = readLine() else { throw CancellationError() }
+                if input.lowercased() == "h" { expanded.toggle(); continue }
+                switch Self.resolveFallbackSelection(input: input, entries: entries, memoryGb: memoryGb, expanded: expanded) {
+                case .cancelled: throw CancellationError()
+                case .rejected(let message): note = message
+                case .selected(let ids): return entries.indices.filter { ids.contains(entries[$0].id) }
+                }
+                continue
+            }
+            switch TerminalPickerInput.readKey() {
+            case .quit: throw CancellationError()
+            case .up: cursor = max(0, cursor - 1)
+            case .down: cursor = min(max(0, visible.count - 1), cursor + 1)
+            case .expand: expanded.toggle()
+            case .toggle:
+                if let focused {
+                    if selected.contains(focused) { selected.remove(focused) } else { selected.insert(focused) }
+                }
+            case .confirm:
+                if !selected.isEmpty { return selected.sorted() }
+                note = "Select a model with Space. Use h to show additional models."
+            case .other: break
+            }
         }
+    }
+
+    static func pickerLines(entries: [PickerEntry], memoryGb: Double, budgetGiB: Double,
+                            selected: Set<Int>, expanded: Bool, focused: Int?) -> [String] {
+        var lines = ["Choose models to download", String(format: "%.0f GiB total RAM · %.1f GiB model budget after system reserve", memoryGb, budgetGiB), ""]
+        let groups = pickerGroups(entries: entries)
+        for (title, indices) in groups where !indices.isEmpty {
+            if title == "Additional models" && !expanded { continue }
+            lines.append(title)
+            if title == "Additional models" {
+                lines.append("These models will most likely not fit on this Mac, or require different hardware. You can still download them.")
+            }
+            for index in indices {
+                let entry = entries[index]
+                lines.append("\(focused == index ? "›" : " ") [\(selected.contains(index) ? "x" : " ")] \(index + 1). \(OnboardingUI.clean(entry.displayName)) · \(String(format: "%.1f GB", entry.sizeGb))\(entry.resumable ? " · resume download" : "")")
+                if let reason = entry.fitReason { lines.append("    " + OnboardingUI.clean(reason)) }
+            }
+            lines.append("")
+        }
+        let hidden = groups[2].1
+        if !hidden.isEmpty {
+            let count = selected.intersection(hidden).count
+            lines.append("\(expanded ? "▾ Hide" : "▸ Show") \(hidden.count) additional \(hidden.count == 1 ? "model" : "models")\(count > 0 ? " · \(count) selected" : "") · h")
+        }
+        let size = selected.filter { !entries[$0].downloaded }.reduce(0.0) { $0 + entries[$1].sizeGb }
+        lines.append(String(format: "\(selected.count) selected · %.1f GB to download", size))
+        lines.append("Fit uses total RAM with padded weights, working memory and KV cache. Each model is estimated separately; running apps matter when loading.")
+        lines.append("↑↓ move · Space toggle · h show/hide · Enter confirm · q quit")
+        return lines
     }
 }

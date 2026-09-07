@@ -20,33 +20,8 @@ struct Login: AsyncParsableCommand {
         let coordinatorURL = snapshot.config.coordinator.url
 
         do {
-            try await performDeviceCodeLogin(
-                coordinatorURL: coordinatorURL,
-                onDisplayCode: { userCode, verificationURI, expiresIn in
-                    print()
-                    print("  To link this machine, open this URL in your browser:")
-                    print()
-                    print("    \(verificationURI)")
-                    print()
-                    print("  Then enter this code:")
-                    print()
-                    print("    \(userCode)")
-                    print()
-                    print("  Waiting for approval (expires in \(expiresIn / 60) minutes)...")
-                },
-                onPollTick: {
-                    print(".", terminator: "")
-                    fflush(stdout)
-                }
-            )
-
-            print()
-            print()
-            print("  Account linked successfully!")
-            print("  Your provider will now be connected to your account.")
-            print("  Earnings will be credited to your account wallet.")
-            print()
-            print("  Start serving with: darkbloom start")
+            try await AccountLinkFlow.run(coordinatorURL: coordinatorURL)
+            OnboardingUI.line("Start serving with: darkbloom start")
         } catch let error as DeviceAuthError {
             printError("\(error)")
             throw ExitCode.failure

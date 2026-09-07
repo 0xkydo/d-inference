@@ -51,7 +51,7 @@ fi
 echo "==> Updating $ENV_NAME fleet against $COORD_URL"
 for HOST in $HOSTS; do
   echo "---- $HOST ----"
-  ssh "$HOST" "curl -fsSL $COORD_URL/install.sh | bash" || {
+  ssh "$HOST" "curl -fsSL $COORD_URL/install.sh | bash -s -- --install-only" || {
     echo "!!! $HOST failed — continuing" >&2
   }
 done

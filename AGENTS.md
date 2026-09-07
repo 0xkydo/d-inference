@@ -2,6 +2,13 @@
 
 Darkbloom is a decentralized private inference network for Apple Silicon Macs. Consumers use OpenAI-compatible APIs, the coordinator handles routing, auth, billing, attestation, and capacity management, and providers run local inference workloads on macOS hardware using MLX-Swift. Request bodies are encrypted hop by hop (NaCl Box on each leg): the coordinator decrypts inside its confidential-VM memory for routing and billing, does not log or retain prompt content, and re-seals each request to the provider's attested key; the provider is the plaintext endpoint. Exact model: `docs/architecture/security/encryption.md`. Docs map: `docs/README.md`; docs rules: `docs/AGENTS.md`.
 
+## Provider Onboarding Development
+
+- Read `docs/developer/onboarding-test.md`. Scope: Install → enrollment → account linkage → model selection/download → final Enter-to-start prompt. Require an explicit action before opening enrollment or the login browser; use neutral styling and selective bold, green success and red errors, without blue/cyan accents.
+- Keep Bubble Tea opt-in. Use total physical RAM plus existing safeguards for model-fit estimates; support multiple downloads, hide empty Downloaded sections, and keep additional models expandable. Reuse Swift enrollment/login/download logic and preserve the update path for completed installs.
+- The human tester runs real installer, reset, enrollment, login and Start commands and approves macOS prompts. Agents prepare builds, inspect logs and run disposable automated tests; never advance the tester's prompts. When providing reset instructions, explain the deletion scope and distinguish fresh setup from resume testing. Full reset removes shared model downloads; cancellation preserves them.
+- Local ad-hoc builds test the UI; signed identity acceptance and device trust require separate qualification. Publishing or registering releases, production deployments and fleet changes require explicit authorization. Production service use is governed by the test operator's authorization, not assumed from this guide.
+
 ## Project Structure
 
 ```text

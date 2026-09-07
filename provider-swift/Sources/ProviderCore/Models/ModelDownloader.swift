@@ -14,9 +14,24 @@ import Foundation
 public struct ModelDownloader: Sendable {
 
     public struct ProgressEvent: Sendable {
+        public struct File: Sendable {
+            public let path: String
+            public let bytes: Int64
+            public let total: Int64
+            public let verified: Bool
+        }
+        /// Complete manifest inventory after checking resumable files.
+        public let files: [File]?
         public let file: String
         public let bytesDownloaded: Int64
         public let bytesTotal: Int64?
+        public let phase: Phase
+        public enum Phase: String, Sendable { case transferring, verifying, publishing, completed }
+        public init(file: String, bytesDownloaded: Int64, bytesTotal: Int64?, phase: Phase = .transferring, files: [File]? = nil) {
+            self.files = files
+            self.file = file; self.bytesDownloaded = bytesDownloaded
+            self.bytesTotal = bytesTotal; self.phase = phase
+        }
     }
 
     /// CDN root for model artifacts. Override with `DARKBLOOM_R2_CDN_URL` for
@@ -72,6 +87,19 @@ public struct ModelDownloader: Sendable {
             throw ModelCatalogError.ineligible(
                 ModelRuntimeIneligibleError(eligibility: eligibility).localizedDescription)
         }
+        try await downloadForStorage(model: model, onProgress: onProgress)
+    }
+
+    /// Explicit user-selected storage, including models this Mac cannot run.
+    /// Download verification is unchanged. This never loads or advertises a model;
+    /// automated prefetch and normal download() retain their eligibility gate.
+    public func downloadForStorage(
+        model: CatalogModel,
+        onProgress: (@Sendable (ProgressEvent) -> Void)? = nil
+    ) async throws {
+        let lease = try ProviderOperationLock.model(model.id)
+        defer { withExtendedLifetime(lease) {} }
+        try Task.checkCancellation()
         if model.r2Prefix != nil, model.aggregateSHA256 != nil {
             let manifest: ModelManifest
             if let catalogClient {
@@ -90,6 +118,8 @@ public struct ModelDownloader: Sendable {
     /// removed, false if the model was not present.
     @discardableResult
     public static func remove(modelID: String) throws -> Bool {
+        let lease = try ProviderOperationLock.model(modelID)
+        defer { withExtendedLifetime(lease) {} }
         let modelDir = cacheModelDirectory(for: modelID)
         guard FileManager.default.fileExists(atPath: modelDir.path) else { return false }
         try FileManager.default.removeItem(at: modelDir)

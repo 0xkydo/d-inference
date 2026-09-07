@@ -36,14 +36,15 @@ struct PickerEntryTests {
         Start.PickerCatalogRow(model: m, displayName: m.displayName)
     }
 
-    private func entry(_ id: String, sizeGb: Double, downloaded: Bool = true) -> Start.PickerEntry {
+    private func entry(_ id: String, sizeGb: Double, downloaded: Bool = false) -> Start.PickerEntry {
         Start.PickerEntry(
             id: id,
             catalogModel: model(id, sizeGb: sizeGb),
             displayName: id,
             sizeGb: sizeGb,
             minRamGb: nil,
-            downloaded: downloaded
+            downloaded: downloaded,
+            fitReason: sizeGb > 100 ? "Too large" : nil
         )
     }
 
@@ -247,12 +248,13 @@ struct PickerEntryTests {
         #expect(entries.count == 1)
         #expect(entries[0].id == "org/too-big")
         #expect(entries[0].downloaded == true, "a model on disk must read downloaded even when it won't fit")
-        // Sized from the on-disk estimate, not the catalog size.
-        #expect(entries[0].sizeGb == 240.0)
+        // Display download size separately from padded runtime weights.
+        #expect(entries[0].sizeGb == 200.0)
+        #expect(entries[0].estimatedWeightsGiB == 240.0)
     }
 
-    @Test("a NOT-downloaded model whose min RAM exceeds the box is hidden")
-    func tooBigNotDownloadedHidden() {
+    @Test("a NOT-downloaded model above the RAM limit remains available for disclosure")
+    func tooBigNotDownloadedRetained() {
         let big = model("org/too-big", sizeGb: 200, minRamGb: 256)
         let entries = Start.buildPickerEntries(
             rows: [row(big)],
@@ -261,7 +263,9 @@ struct PickerEntryTests {
             resumableIDs: [],
             memoryGb: 18
         )
-        #expect(entries.isEmpty, "an unrunnable model that isn't on disk should not clutter the picker")
+        #expect(entries.count == 1)
+        #expect(Start.pickerGroups(entries: entries)[2].1 == [0])
+        #expect(entries[0].fitReason != nil)
     }
 
     @Test("an interrupted (staged) not-downloaded model is flagged resumable")

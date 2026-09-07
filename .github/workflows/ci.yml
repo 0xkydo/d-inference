@@ -14,6 +14,7 @@ jobs:
       - name: Check source, fallback, and installer parity
         run: |
           ./scripts/check-release-version.sh
+          python3 scripts/test-release-candidate.py
           ./scripts/sync-install-embed.sh check
           ./scripts/test-prod-env-refresh.sh
 
@@ -172,6 +173,12 @@ jobs:
           done < <(
             find provider-swift/.build -type d -path '*.xctest/Contents/MacOS' -print
           )
+      - name: Build and test Bubble Tea and its Swift session
+        run: |
+          scripts/build-provider-tui.sh
+          cd provider-tui && go test -race ./... && cd ..
+          python3 scripts/onboarding/test-session.py
+          python3 scripts/onboarding/test-companion-package.py
       - name: Run Swift tests
         working-directory: provider-swift
         # NOTE: do NOT pass --build-tests-relinking flags; the bundle is already
@@ -294,7 +301,10 @@ jobs:
         run: ../../scripts/run-nested-suite.sh CBv2KVSharingParityTests
       - name: Run atomic installer artifact tests
         timeout-minutes: 2
-        run: ./scripts/test-install-atomic.sh
+        run: |
+          ./scripts/test-install-atomic.sh
+          python3 scripts/test-install-onboarding.py
+          python3 scripts/onboarding/test-reset.py
 
   cache-swift:
     name: Swift Build + Cache

@@ -53,28 +53,7 @@ extension Start {
         }
 
         do {
-            try await performDeviceCodeLogin(
-                coordinatorURL: coordinatorURL,
-                onDisplayCode: { userCode, verificationURI, expiresIn in
-                    print()
-                    print("  Open this URL in your browser:")
-                    print()
-                    print("    \(verificationURI)")
-                    print()
-                    print("  Then enter this code:")
-                    print()
-                    print("    \(userCode)")
-                    print()
-                    print("  Waiting for approval (expires in \(expiresIn / 60) minutes)...")
-                },
-                onPollTick: {
-                    print(".", terminator: "")
-                    fflush(stdout)
-                }
-            )
-            print()
-            print("  Account linked successfully!")
-            print()
+            try await AccountLinkFlow.run(coordinatorURL: coordinatorURL)
         } catch {
             print()
             print("  Could not link account: \(error)")

@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased: CLI onboarding
+
+- Replace the jumping latest-file download display with a prominent ETA, overall progress and a clear queue of selected models. Keep file bars, speed and elapsed time behind a detail toggle. Preserve concurrent file updates and resume baselines, allow browsing during transfer, and distinguish downloading from integrity verification.
+
+- Show a persistent onboarding header, five-step progress and a prominent next action. Detect macOS enrollment approval automatically; browser login still requires Enter. Add `reset.sh --all` for full local state, shared model-cache and downloaded-installer cleanup.
+- Add opt-in `darkbloom start --tui` and installer `--tui` handoff using a bundled Bubble Tea companion and a narrow Swift session. Preserve explicit enrollment, account linkage and final Start actions; closing setup retains resumable downloads and leaves independently started providers running.
+- Separate download progress from terminal rendering; coordinate setup and shared model-cache writers across processes. Package and verify the companion as part of the existing signed app/update transaction.
+
+- Build signed test artifacts without publishing a release or depending on a dev coordinator; accept local release metadata through the normal verified installer for test-Mac iteration.
+
+- Continue first-time `curl | bash` installation through read-only device enrollment, account linkage, model downloads, and an explicit Enter-to-start confirmation. Resume unfinished setup with `darkbloom start`; keep updates and unattended installs out of onboarding.
+- Group models into Downloaded, Available to download, and expandable additional models. Estimate fit from total RAM with existing safety reserves; allow additional downloads without enabling those models for serving.
+- Persist the onboarding coordinator for later CLI commands; preserve dev/local endpoints and keep explicit test configs isolated. Add a scoped test-Mac reset script; report incomplete unenrollment cleanup, including keychain failures.
+- Report verified readiness from fresh daemon state. Reuse standalone enrollment/login services and verified, resumable downloads; preserve the existing idle-memory policy during onboarding.
+
 ## Unreleased — stats request-flow refresh
 
 - Restore Stats refreshes on large usage windows by aggregating request origins before looking up provider locations. Preserve weighted coordinates, request/token counts, and the top-50 flow limit while avoiding large temporary sorts.

@@ -1,0 +1,56 @@
+╔══════════════════════════════════════════════╗
+║  Darkbloom — Private AI on Verified Macs     ║
+╚══════════════════════════════════════════════╝
+
+  Apple M2 Pro · 32GB · macOS 15.6
+
+→ [1/5] Fetching latest release from https://api.darkbloom.dev ...
+  Version: 0.8.10
+  Backend: mlx-swift
+  Signed by: Developer ID Application: Eigen Labs, Inc.
+
+→ [2/5] Downloading Darkbloom v0.8.10...
+[DOWNLOAD]
+  Bundle hash verified ✓
+  Staging and verifying the complete app before touching the live install ...
+  Strict signature, runtime resources, and atomic swap verified ✓
+  Binaries installed ✓
+  Shortcut: darkbloom
+
+→ [3/5] Provisioning Secure Enclave identity...
+  Secure Enclave ✓ (P-256 key generated)
+
+→ [4/5] Enrollment + device attestation...
+  Requesting enrollment profile from coordinator...
+
+  ┌──────────────────────────────────────────────────┐
+  │ ACTION REQUIRED: Install the enrollment profile  │
+  │                                                  │
+  │ This profile lets the coordinator verify:        │
+  │  • SIP, Secure Boot, system integrity            │
+  │  • Your Secure Enclave is genuine Apple silicon  │
+  │  • Device identity signed by Apple's Root CA     │
+  │                                                  │
+  │ Darkbloom CANNOT erase, lock, or control         │
+  │ your Mac. Remove anytime in System Settings.     │
+  └──────────────────────────────────────────────────┘
+
+  System Settings opened — click Install and enter your password.
+  After installing, the provider will verify on first start.
+  Enrollment pending ⚠ (complete it in System Settings, or run: darkbloom enroll)
+
+→ [5/5] Inference model...
+  Run interactively to pick a starter model:
+    curl -fsSL https://api.darkbloom.dev/install.sh | bash -s
+  Or list the catalog with:  darkbloom models catalog
+
+╔══════════════════════════════════════════════╗
+║  Install complete                            ║
+╚══════════════════════════════════════════════╝
+
+  Next steps:
+    darkbloom doctor             # verify the system is ready
+    darkbloom models catalog     # browse available models
+    darkbloom models download <id>
+    darkbloom login              # link this Mac to your account
+    darkbloom start              # serve inference (interactive picker)

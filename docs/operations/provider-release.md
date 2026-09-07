@@ -1,6 +1,6 @@
 # Release a provider version
 
-> Last updated: 2026-09-04 · commit `ac60c5ada`
+> Last updated: 2026-09-07 · commit `25aa5b0b9`
 
 Runbook for shipping a new `darkbloom` provider CLI: bump the two version
 constants, land the changelog, push a `vX.Y.Z` tag, approve the `prod`
@@ -116,6 +116,25 @@ Without a tag the version is read from `ProviderCore.swift` (or
 without a tag is refused ("Production publication requires a source-matching
 release tag"). Dev releases use `DEV_*` secrets, register with the dev
 coordinator, and create no GitHub Release.
+
+### 5a. Signed test artifact without a deployed coordinator
+
+```bash
+gh workflow run release-swift.yml --ref <branch> \
+  -f environment=dev -f publish_release=false
+```
+
+This builds, signs, notarizes, and runs the same final bundle checks, then retains
+only the distributable archive and an allowlisted provenance manifest as a GitHub
+Actions artifact for 30 days. R2 credentials/uploads and coordinator registration
+are skipped. No live dev environment is required; `dev` here selects the GitHub
+environment used for signing. Existing tag pushes and manual runs without the
+new flag retain their publishing behavior. A nonpublishing `prod` run is refused.
+
+`scripts/resolve-provider-release.sh` validates mode/version before writing job
+outputs. `scripts/release-qualification-manifest.py` verifies the final archive
+hash and accepts only Apple's accepted submission status. Follow
+[onboarding-test.md](../developer/onboarding-test.md) to test the candidate on a Mac.
 
 ### 6. Approve the environment deployment
 
@@ -253,3 +272,13 @@ it** so the previous active version becomes "latest" again.
 - [`coordinator-deploy.md`](coordinator-deploy.md) — shipping the coordinator half of a version bump.
 - [`release-policy-rollout.md`](release-policy-rollout.md) — how registered releases feed the routing gate.
 - [`../reference/api-contracts.md`](../reference/api-contracts.md) — `/v1/releases/latest`, `/v1/version` shapes.
+
+## Onboarding companion in candidate bundles
+
+The release workflow also builds `darkbloom-tui` through
+`scripts/build-provider-tui.sh`, signs it as `io.darkbloom.onboarding` without
+provider keychain/APNs/debugger entitlements, and seals it inside the same app
+and notarization. The `onboarding-session-v1` capability marker and corresponding
+CLI capability require the companion to be present. Installer and updater checks
+reject incomplete candidate bundles; pre-onboarding releases remain compatible.
+There is no independent companion upload, release registration, or updater.

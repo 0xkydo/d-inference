@@ -1,0 +1,18 @@
+{
+  "commands": [
+    {"version":1,"id":1,"action":"hello"},
+    {"version":1,"id":2,"action":"enroll","revision":1},
+    {"version":1,"id":3,"action":"refresh","revision":2},
+    {"version":1,"id":4,"action":"link","revision":3},
+    {"version":1,"id":5,"action":"select_models","revision":4,"modelIDs":["small","large"]},
+    {"version":1,"id":6,"action":"start","revision":6},
+    {"version":1,"id":7,"action":"cancel"}
+  ],
+  "events": [
+    {"version":1,"kind":"snapshot","commandID":1,"snapshot":{"phase":"enrollment","revision":1,"enrolled":false,"linked":false,"providerRunning":false,"observedAt":0,"memoryGiB":128,"budgetGiB":115.2,"models":[],"selectedModelIDs":[]}},
+    {"version":1,"kind":"snapshot","commandID":4,"snapshot":{"phase":"models","revision":4,"enrolled":true,"linked":true,"providerRunning":true,"observedAt":123,"memoryGiB":128,"budgetGiB":115.2,"models":[{"id":"small","name":"Small model","sizeGB":4,"downloaded":false,"resumable":true},{"id":"large","name":"Large model","sizeGB":400,"downloaded":false,"resumable":false,"fitReason":"Requires 512 GiB RAM"}],"selectedModelIDs":["small"]}},
+    {"version":1,"kind":"link_code","commandID":4,"linkCode":{"code":"ABCD-EFGH","url":"https://example.test/link","expiresIn":300}},
+    {"version":1,"kind":"progress","commandID":5,"progress":{"modelID":"small","file":"weights.safetensors","bytes":1024,"total":1024,"stage":"verifying","models":[{"id":"small","bytes":1024,"total":1024,"stage":"verifying"}],"files":[{"id":"weights.safetensors","bytes":1024,"total":1024,"stage":"completed"}],"fileCount":1,"networkBytes":512}},
+    {"version":1,"kind":"error","commandID":6,"error":"stale_command"}
+  ]
+}

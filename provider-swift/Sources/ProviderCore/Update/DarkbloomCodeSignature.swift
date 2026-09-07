@@ -14,6 +14,7 @@ enum DarkbloomCodeSignature {
     enum Policy: Sendable, Equatable {
         case darkbloomProduction
         case darkbloomFanHelper
+        case darkbloomOnboarding
         case structuralForIsolatedTest
     }
 
@@ -29,6 +30,9 @@ enum DarkbloomCodeSignature {
             arguments.append("-R=\(designatedRequirement)")
         } else if policy == .darkbloomFanHelper {
             arguments.append("-R=\(fanHelperDesignatedRequirement)")
+        }
+        if policy == .darkbloomOnboarding {
+            arguments.append("-R=anchor apple generic and identifier \"io.darkbloom.onboarding\" and certificate leaf[subject.OU] = \"\(teamID)\"")
         }
         arguments.append(target.path)
         try BoundedProcess.run(

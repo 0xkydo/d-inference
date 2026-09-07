@@ -20,8 +20,43 @@ extension Start {
         // Run critical checks before downloading models or prompting.
         try runPreflightChecks(snapshot: snapshot)
 
-        // Offer account linking before the model picker.
-        await offerInlineLogin(coordinatorURL: coordinatorURL)
+        guidedOnboarding = OnboardingState.shouldGuide(
+            explicit: onboarding, pending: OnboardingState.isPending(),
+            installedService: LaunchAgent.isInstalled(), interactive: OnboardingUI.isTerminal,
+            explicitModels: !model.isEmpty || all || localEndpoint)
+        if guidedOnboarding {
+            var state = OnboardingState.load() ?? OnboardingState(coordinatorURL: coordinatorURL)
+            if state.coordinatorURL != coordinatorURL { state = OnboardingState(coordinatorURL: coordinatorURL) }
+            // Store absolute paths so resuming from another working directory
+            // cannot accidentally open a different test config.
+            state.configPath = configOptions.config == nil ? nil : snapshot.configPath.path
+            if (try? OnboardingState.webSocketURL(config.coordinator.url)) != coordinatorURL {
+                // Account tokens are shared local state. A deliberate environment
+                // switch must link against the chosen coordinator before reusing
+                // one. Persist this requirement across interrupted logins.
+                state.requiresAccountLink = true
+            }
+            try state.save()
+            // Keep later login/models/update/doctor commands on this environment,
+            // including after the temporary resume marker has been removed.
+            let savePath = configOptions.config == nil ? try ConfigManager.defaultConfigPath() : snapshot.configPath
+            try OnboardingConfiguration.saveCoordinator(coordinatorURL, to: savePath, fallback: config)
+            try await GuidedOnboarding.prepare(coordinatorURL: coordinatorURL, enroll: {
+                try await GuidedOnboarding.retry("Enrollment could not finish") {
+                    try await EnrollmentFlow.run(coordinatorURL: coordinatorURL, waitForCompletion: true)
+                }
+            }, hasAccount: {
+                state.requiresAccountLink != true && AuthTokenStore.load() != nil
+            }, login: {
+                try await GuidedOnboarding.retry("Account linkage could not finish") {
+                    try await AccountLinkFlow.run(coordinatorURL: coordinatorURL, relink: state.requiresAccountLink == true)
+                    state.requiresAccountLink = false
+                    try state.save()
+                }
+            })
+        } else {
+            await offerInlineLogin(coordinatorURL: coordinatorURL)
+        }
 
         let selectedModelIDs: [String]
 
@@ -47,7 +82,7 @@ extension Start {
         }
 
         guard !selectedModelIDs.isEmpty else {
-            printError("No models selected.")
+            printError("No models were enabled for this Mac. Run darkbloom start and choose a model that fits; any downloads are kept.")
             throw ExitCode.failure
         }
 
@@ -55,47 +90,33 @@ extension Start {
         // picker (never for --model/--all/relaunch), with the CURRENT policy as
         // the Enter default. `--idle-timeout` already answered it in `run()`.
         var idleMinutes = config.backend.idleTimeoutMins
-        if model.isEmpty, !all, idleTimeout == nil {
+        if !guidedOnboarding, model.isEmpty, !all, idleTimeout == nil {
             idleMinutes = try promptIdleUnloadPolicy(
                 current: idleMinutes,
                 selectedModelIDs: selectedModelIDs,
                 snapshot: snapshot)
         }
 
-        try LaunchAgent.installAndStart(
-            coordinatorURL: coordinatorURL,
-            models: selectedModelIDs,
-            configPath: configPath,
-            localEndpoint: LaunchAgent.LocalEndpointOptions(
-                enabled: localEndpoint, port: port, bind: bind, noAuth: noAuth
-            )
-        )
-
-        // Arm the crash-recovery watchdog (relaunches ~5 min after a crash;
-        // `stop` disarms, `auto_restart = false` opts out — including
-        // disarming a watchdog left loaded by a previous opted-in config).
-        // Best-effort.
-        let autoRestartOn = config.provider.autoRestart
-        switch WatchdogAgent.rearmAction(
-            autoRestartEnabled: autoRestartOn,
-            isLoaded: WatchdogAgent.isLoaded()
-        ) {
-        case .arm:
-            do {
-                try WatchdogAgent.installAndStart(
-                    configPath: snapshot.configPath
-                )
-            } catch {
-                printError("note: could not install crash-recovery watchdog: \(error)")
-            }
-        case .disarm:
-            try? WatchdogAgent.stop()
-        case nil:
-            break
+        if guidedOnboarding {
+            OnboardingUI.heading("Ready to start Darkbloom")
+            OnboardingUI.line("Device enrollment and account linkage are complete. Your selected models are downloaded.")
+            OnboardingUI.line("Darkbloom will run in the background and start when you log in. Use darkbloom stop to stop it.")
+            try OnboardingUI.confirm("Press Enter to start Darkbloom")
         }
+        let launchedAt = Date().timeIntervalSince1970
+        let autoRestartOn = config.provider.autoRestart
+        let watchdogOK = try ProviderStartSequence.start(
+            coordinatorURL: coordinatorURL, models: selectedModelIDs, configPath: configPath,
+            watchdogConfigPath: snapshot.configPath, autoRestart: autoRestartOn,
+            localEndpoint: LaunchAgent.LocalEndpointOptions(enabled: localEndpoint, port: port, bind: bind, noAuth: noAuth))
+        if !watchdogOK { printError("note: could not install crash-recovery watchdog") }
 
+        if guidedOnboarding {
+            try OnboardingState.complete()
+            await OnboardingStartup.report(launchedAt: launchedAt)
+        }
         let logPath = LaunchAgent.logPath().path
-        print("Provider started as background service.")
+        if !guidedOnboarding { print("Provider started as background service.") }
         print("  Models:  \(selectedModelIDs.count)")
         for id in selectedModelIDs {
             print("    \(id)")

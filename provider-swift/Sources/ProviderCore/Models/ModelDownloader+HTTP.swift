@@ -72,7 +72,10 @@ extension ModelDownloader {
                     required: required,
                     maximumBytes: maximumBytes,
                     requestTimeout: requestTimeout,
-                    onChunk: onChunk
+                    onChunk: { bytes in
+                        onChunk?(bytes)
+                        onProgress?(ProgressEvent(file: label, bytesDownloaded: bytes, bytesTotal: maximumBytes))
+                    }
                 )
                 guard ok else {
                     // Optional file that does not exist (404/403). `streamDownload`
@@ -82,6 +85,7 @@ extension ModelDownloader {
 
                 if let expectedSHA256 {
                     let actual = Self.sha256HexForVerification(of: partial)
+                    try Task.checkCancellation()
                     let size = fileSize(partial)
                     guard actual == expectedSHA256 else {
                         // The `.part` is corrupt (hash mismatch). Delete it so the
@@ -93,6 +97,7 @@ extension ModelDownloader {
                         )
                     }
                 }
+                try Task.checkCancellation()
                 try? fm.removeItem(at: destination)
                 try fm.moveItem(at: partial, to: destination)
                 let downloaded = fileSize(destination)
@@ -224,7 +229,7 @@ extension ModelDownloader {
     private static func sha256Hex(of url: URL) -> String? {
         // Use WeightHasher.hashSingleFile which handles the NSFileProtection
         // fallback for files moved from URLSession temp locations.
-        guard let digest = WeightHasher.hashSingleFile(at: url) else { return nil }
+        guard let digest = WeightHasher.hashSingleFile(at: url, isCancelled: { Task.isCancelled }) else { return nil }
         return digest.map { String(format: "%02x", $0) }.joined()
     }
 

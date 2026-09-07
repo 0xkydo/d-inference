@@ -52,6 +52,7 @@ struct Unenroll: AsyncParsableCommand {
         print("  • Config dir:    ~/.config/darkbloom/  (and legacy ~/.config/eigeninference/)")
         print("  • Auth token:    ~/.darkbloom/auth_token")
         print("  • Legacy keys:   ~/.darkbloom/{wallet_key,enclave_key.data,…}")
+        print("  • Keychain:      Attestation keys and the wrapped model-cache key")
         print()
 
         let proceed: Bool
@@ -64,8 +65,13 @@ struct Unenroll: AsyncParsableCommand {
         }
 
         if proceed {
-            LocalDataCleanup.purge()
-            print("  ✓ Local data cleaned up.")
+            let failures = LocalDataCleanup.purge()
+            guard failures.isEmpty else {
+                for failure in failures { printError("  Could not remove \(failure)") }
+                printError("Local cleanup is incomplete. Keep the signed CLI installed, resolve these errors, then retry darkbloom unenroll --force.")
+                throw ExitCode.failure
+            }
+            print("  ✓ Local data cleaned up. Remove any remaining Darkbloom profile in System Settings.")
         } else {
             print("  Skipped local cleanup.")
         }

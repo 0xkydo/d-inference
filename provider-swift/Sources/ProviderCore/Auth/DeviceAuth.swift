@@ -54,18 +54,18 @@ public enum AuthTokenStore: Sendable {
     }
 
     /// Load the saved auth token, if any.
-    public static func load() -> String? {
-        load(canonicalPath: tokenPath(), legacyPaths: tokenPathOverride() == nil ? legacyTokenPaths() : [])
+    public static func load(migrateLegacy: Bool = true) -> String? {
+        load(canonicalPath: tokenPath(), legacyPaths: tokenPathOverride() == nil ? legacyTokenPaths() : [], migrateLegacy: migrateLegacy)
     }
 
-    static func load(canonicalPath: URL, legacyPaths: [URL]) -> String? {
+    static func load(canonicalPath: URL, legacyPaths: [URL], migrateLegacy: Bool = true) -> String? {
         if let token = readToken(from: canonicalPath) {
             return token
         }
 
         for legacyPath in legacyPaths where legacyPath != canonicalPath {
             if let token = readToken(from: legacyPath) {
-                try? save(token, to: canonicalPath)
+                if migrateLegacy { try? save(token, to: canonicalPath) }
                 return token
             }
         }
@@ -193,10 +193,11 @@ public func coordinatorHTTPBase(_ wsURL: String) -> String {
 public func performDeviceCodeLogin(
     coordinatorURL: String,
     onDisplayCode: @Sendable (String, String, Int) -> Void,
-    onPollTick: (@Sendable () -> Void)? = nil
+    onPollTick: (@Sendable () -> Void)? = nil,
+    relink: Bool = false
 ) async throws -> String {
     // Check if already logged in.
-    if let existingToken = AuthTokenStore.load() {
+    if !relink, let existingToken = AuthTokenStore.load() {
         let prefix = String(existingToken.prefix(min(20, existingToken.count)))
         throw DeviceAuthError.alreadyLoggedIn(tokenPrefix: prefix)
     }
@@ -232,6 +233,11 @@ public func performDeviceCodeLogin(
         throw DeviceAuthError.invalidResponse("could not decode device code response: \(error)")
     }
 
+    try Task.checkCancellation()
+    guard let verificationURL = URL(string: dc.verification_uri),
+          ["https", "http"].contains(verificationURL.scheme), verificationURL.host != nil else {
+        throw DeviceAuthError.invalidResponse("invalid verification URL")
+    }
     // Display the code to the user.
     onDisplayCode(dc.user_code, dc.verification_uri, dc.expires_in)
 
@@ -288,6 +294,7 @@ public func performDeviceCodeLogin(
             guard let token = tokenResp.token, !token.isEmpty else {
                 throw DeviceAuthError.invalidResponse("authorized but no token in response")
             }
+            try Task.checkCancellation()
             try AuthTokenStore.save(token)
             return token
 

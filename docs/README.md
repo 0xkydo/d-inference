@@ -1,6 +1,6 @@
 # Darkbloom documentation
 
-> Last updated: 2026-09-03 · commit `5d400cf75`
+> Last updated: 2026-09-07 · commit `fdb2edd28`
 
 > Darkbloom is a decentralized private-inference network: an OpenAI- and
 > Anthropic-compatible HTTP API served by a Go coordinator that routes each
@@ -19,6 +19,7 @@
 - [`developer/build.md`](developer/build.md) then [`developer/test.md`](developer/test.md): build and test every component locally.
 - [`operations/README.md`](operations/README.md): deploy or change production (human approval required for every mutation).
 - [`architecture/overview.md`](architecture/overview.md): understand the whole system in one page.
+- [`design/provider-ui-shared-swift.md`](design/provider-ui-shared-swift.md): proposed Bubble Tea and native macOS direction, color-coded stages, research record and implementation starting point; not yet built.
 - [`architecture/security/encryption.md`](architecture/security/encryption.md): the exact, hop-by-hop privacy model — the only page that states it.
 
 ## How the system works (explanation)
@@ -97,6 +98,7 @@
 
 - [`developer/build.md`](developer/build.md): build the coordinator, sidecar, provider, and UIs; toolchain pins.
 - [`developer/test.md`](developer/test.md): every test suite, what CI runs, how to run the e2e suite.
+- [`developer/onboarding-test.md`](developer/onboarding-test.md): reset a test Mac and exercise the signed installer, enrollment, model selection, updates, and real readiness.
 
 ## Operations runbooks (production; human approval per mutation)
 

@@ -1,6 +1,6 @@
 # Install, update, and uninstall the provider
 
-> Last updated: 2026-09-03 · commit `5d400cf75`
+> Last updated: 2026-09-07 · commit `bbf6f83d4`
 
 How to put the `darkbloom` CLI on an Apple Silicon Mac with `scripts/install.sh`,
 what the script verifies before it touches an existing install, how the binary
@@ -22,18 +22,8 @@ is updated afterwards, and how to remove everything. For operators; at the end
 
 ### 1. Run the installer
 
-[backend]
-enabled_models = []
-idle_timeout_mins = 60   # free when idle; 0 = always ready (see `darkbloom idle`)
-max_model_slots = 3
-
-[gemma_optimizations]
-prefill_layer18 = true
-weighted_r1 = true
-
-[coordinator]
-url = "wss://api.darkbloom.dev/ws/provider"
-private_only = false
+```bash
+curl -fsSL https://api.darkbloom.dev/install.sh | bash
 ```
 
 The coordinator serves `scripts/install.sh` at `/install.sh` with its own base
@@ -48,11 +38,11 @@ The script performs these actions in order (`scripts/install.sh`; failures exit
 1. **Preflight.** Aborts unless `uname` is `Darwin` and `uname -m` is `arm64`.
    Prints chip (`sysctl machdep.cpu.brand_string`), RAM (`hw.memsize`) and
    macOS version (`sw_vers`).
-2. **Step 1/5 — release metadata.** `GET $COORD_URL/v1/releases/latest`, then
+2. **Step 1/3 — release metadata.** `GET $COORD_URL/v1/releases/latest`, then
    extracts `url`, `bundle_hash`, `binary_hash`, `metallib_hash`, `version`,
    `backend` with `sed`. Missing `url`, `bundle_hash` or `version` aborts.
-3. **Step 2/5 — download and verify.** Creates `~/.darkbloom` and
-   `~/.darkbloom/bin`, downloads the tarball to `/tmp/darkbloom-bundle.tar.gz`
+3. **Step 2/3 — download and verify.** Creates `~/.darkbloom` and
+   `~/.darkbloom/bin`, downloads the tarball to a unique `mktemp` file under `${TMPDIR:-/tmp}`
    and requires `shasum -a 256` to equal `bundle_hash` (mismatch deletes the
    file and aborts). `install_bundle_atomically` then:
    - extracts into `~/.darkbloom/.install-staging-<pid>-<random>`;
@@ -95,7 +85,7 @@ The script performs these actions in order (`scripts/install.sh`; failures exit
    `.darkbloom/bin`, lines referencing `.dginf/bin`, `.eigeninference/bin`,
    `alias eigeninf`, `alias dginf`, `# EigenInference` and `# Darkbloom` are
    deleted and `# Darkbloom` + `export PATH="$HOME/.darkbloom/bin:$PATH"` is
-   appended; the rc is then sourced.
+   appended. The installer exports its own PATH without sourcing shell startup files.
 5. **Legacy install migration.** For each real directory `~/.dginf` and
    `~/.eigeninference`: `cp -n` of `enclave_key.data`, `wallet_key` and
    `auth_token` into `~/.darkbloom`, then the old directory is replaced by a
@@ -103,18 +93,25 @@ The script performs these actions in order (`scripts/install.sh`; failures exit
    the CLI copies a config found at a legacy path to
    `~/.config/darkbloom/provider.toml` on its next run
    (`provider-swift/Sources/darkbloom/Darkbloom.swift`, `migrateConfigIfNeeded`).
-6. **Step 3/5 — Secure Enclave identity.** Runs `darkbloom-enclave info`
+6. **Step 3/3 — Secure Enclave identity.** Runs `darkbloom-enclave info`
    (`provider-swift/Sources/darkbloom-enclave-cli/EnclaveCLI.swift`), which
    creates the P-256 key if missing. Failure prints a warning; the install
    continues with reduced trust (see [attestation](./attestation.md)).
-7. **Step 4/5 — enrollment.** If `profiles status -type enrollment` does not
-   report `MDM enrollment: Yes`, the script `POST`s `{}` to
-   `$COORD_URL/v1/enroll`, saves the `.mobileconfig` under
-   `${TMPDIR:-/tmp}/Darkbloom-Enroll.XXXXXX/`, opens it and the System Settings
-   Profiles pane, waits for Enter (interactive) or 3 s (piped), then re-checks.
-   An unreachable coordinator prints `enroll later with: darkbloom enroll`.
-8. **Step 5/5 — catalog.** `GET $COORD_URL/v1/models/catalog?type=text`;
-   interactive runs print up to 20 entries. Nothing is downloaded.
+7. **First-time onboarding.** A new install writes `~/.darkbloom/onboarding-pending`.
+   After CLI installation, `finish_installation` checks for terminal output and an
+   openable controlling terminal. This works with `curl | bash`: the installed
+   CLI receives `/dev/tty` as stdin, while the shell keeps its script pipe.
+   The handoff is `darkbloom start --onboarding --coordinator-url <origin>`.
+   Enrollment, account linkage, model selection/downloads, and Enter-to-start are
+   described in the [quickstart](./quickstart.md). The CLI saves coordinator and
+   selection intent in the marker, checks actual state on resume, and removes
+   the marker after launchd successfully starts the service.
+8. **Updates and unattended use.** Existing installs without a pending marker
+   do not run onboarding or start/restart the provider. The script prints the
+   appropriate restart/start instruction. `--install-only` suppresses onboarding
+   even with a terminal: `curl -fsSL https://api.darkbloom.dev/install.sh | bash -s -- --install-only`.
+   Without a terminal, a fresh install prints the resume command. If the release
+   predates `start --onboarding`, the installer prints manual setup commands.
 
 ### 2. Reload your shell
 

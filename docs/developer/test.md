@@ -1,6 +1,6 @@
 # Test
 
-> Last updated: 2026-09-06 · commit `8c22f0cdb`
+> Last updated: 2026-09-07 · commit `553137548`
 
 How to run the unit tests for each component, the end-to-end suite that boots a
 real coordinator + Swift provider against ephemeral Postgres, and the docs
@@ -115,6 +115,9 @@ prompt-contract implementations agree on the same production vectors; the
 procedure, its inputs and the regeneration flow are in
 [step 9](#9-prompt-contract-parity-fixtures-and-vectors).
 
+For real onboarding and repeated fresh installs on a test Mac, use the
+[onboarding test procedure](onboarding-test.md).
+
 **Installer** — `./scripts/test-install-atomic.sh` exercises the atomic
 install/replace path of `scripts/install.sh` in a temp dir (and runs
 `scripts/sync-install-embed.sh check` first).
@@ -135,6 +138,10 @@ node --test landing/earn-calculator-core.test.js
 make benchmark-wrapper-test        # python3 -m unittest discover -s gemma_contbatch/tests -t .   (in scripts/)
 ./scripts/check-release-version.sh # ProviderCore.version == coordinator LatestProviderVersion (see operations/provider-release.md)
 ./scripts/sync-install-embed.sh check   # coordinator/api/install.sh byte-identical to scripts/install.sh
+python3 scripts/test-install-onboarding.py # fake-CLI PTY handoff, updates, unattended, resume, old releases
+python3 scripts/onboarding/test-reset.py   # scoped cleanup, symlink refusal, shell backup preservation
+python3 scripts/test-release-candidate.py  # nonpublishing release gates and candidate provenance
+python3 scripts/onboarding/test-companion-package.py # isolated installer companion and signature-policy fixtures
 ./scripts/test-prod-env-refresh.sh      # deploy/gcp/prod/refresh-env.sh contract
 ./scripts/test-publish-model.sh         # scripts/publish-model.sh dry-run contract
 ```
@@ -372,6 +379,34 @@ token IDs are accepted.
 | provider never registers a model in e2e | checkpoint not in the HF cache, or not CBv2-servable (`gpt_oss`/`gemma4` families only) | download the pinned snapshot; check `DARKBLOOM_TESTBED_MODEL` |
 | nested suite step fails with "executed 0 tests" | swift-testing pass routed at an executable target / wrong filter | rebuild with `swift build --build-tests` in `libs/mlx-swift-lm`; keep suite names exact |
 | paged gate fails immediately with `DARKBLOOM_CBV2_PAGED_KV=… is set` | kill switch in your shell | `unset DARKBLOOM_CBV2_PAGED_KV` |
+
+## Onboarding session and terminal checks
+
+`make provider-tui-test` runs the Go component/race tests and
+`scripts/onboarding/test-session.py`, plus isolated installer companion checks.
+The session test builds a disposable executable
+from the actual Swift contract, workflow and pipe host with injected services,
+then drives it with an independent Python client and the real Bubble Tea UI in
+PTYs. It does not run the real installer, enrollment, login, provider Start, or
+trust operations; all fixture state is temporary. The PTY supervisor checks
+restored terminal settings before macOS revokes the slave on session exit,
+excluding only the kernel-maintained `PENDIN` bit.
+
+The terminal suite also checks automatic advance after fixture enrollment
+approval without opening login. Reset fixtures exercise `--all` inventory and
+model/installer cleanup in disposable directories, including preservation of
+unrelated files and refusal to follow a linked cache parent.
+
+After building Swift tests and staging the source-matched metallib, run:
+
+```bash
+swift test --package-path provider-swift --skip-build --filter 'Onboarding|ModelPrefetchDownloaderTests|ModelStorageDownloadTests|HuggingFaceDownloadTests|WeightHasherCancellation|SelfUpdaterTests|TerminalPicker|PickerEntry|LocalDataCleanup'
+```
+
+`make provider-test` also builds the Go companion used by isolated signed-bundle
+update fixtures. Shared JSON fixtures live in
+`provider-tui/testdata/contract.json`. Human-operated signed qualification remains
+separate; follow [onboarding-test.md](onboarding-test.md).
 
 ## Related
 

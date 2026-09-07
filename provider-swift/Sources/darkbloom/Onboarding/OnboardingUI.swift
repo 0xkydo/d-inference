@@ -1,0 +1,73 @@
+import Foundation
+import Darwin
+
+/// Small shared terminal vocabulary. No color or cursor controls in logs.
+enum OnboardingUI {
+    static var isTerminal: Bool { isatty(STDIN_FILENO) != 0 && isatty(STDOUT_FILENO) != 0 }
+    static var usesColor: Bool {
+        supportsColor(terminal: isatty(STDOUT_FILENO) != 0, environment: ProcessInfo.processInfo.environment)
+    }
+    static func supportsColor(terminal: Bool, environment: [String: String]) -> Bool {
+        terminal && (environment["NO_COLOR"] ?? "").isEmpty && environment["TERM"] != "dumb"
+    }
+    static var width: Int {
+        var size = winsize()
+        return ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) == 0 && size.ws_col > 0
+            ? max(20, Int(size.ws_col) - 4) : 76
+    }
+    static func clean(_ text: String) -> String {
+        String(String.UnicodeScalarView(text.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }))
+    }
+    static func style(_ text: String, _ code: String) -> String {
+        usesColor ? "\u{1B}[\(code)m\(text)\u{1B}[0m" : text
+    }
+    static func wrapped(_ text: String, width: Int = width) -> [String] {
+        var lines = [String](), current = ""
+        for word in text.split(separator: " ") {
+            if !current.isEmpty && current.count + word.count + 1 > width {
+                lines.append(current); current = ""
+            }
+            var remainder = String(word)
+            while remainder.count > width {
+                if !current.isEmpty { lines.append(current); current = "" }
+                lines.append(String(remainder.prefix(width)))
+                remainder = String(remainder.dropFirst(width))
+            }
+            current += (current.isEmpty ? "" : " ") + remainder
+        }
+        lines.append(current)
+        return lines
+    }
+    static func line(_ text: String = "", style code: String? = nil) {
+        for row in wrapped(text) { print("  " + (code.map { style(row, $0) } ?? row)) }
+    }
+    static func heading(_ text: String) { print(); line(text, style: "1") }
+    static func instruction(_ text: String) { line(text) }
+    static func detail(_ text: String) { line(text, style: "2") }
+    static func failure(_ text: String) { line(text, style: "31") }
+    static func success(_ text: String) { line(text, style: "32") }
+    static func box(title: String, paragraphs: [String]) {
+        let inner = min(68, width - 4)
+        print("  " + style("┌" + String(repeating: "─", count: inner + 2) + "┐", "2"))
+        for (index, text) in ([title, ""] + paragraphs.flatMap({ [$0, ""] })).enumerated() {
+            for row in wrapped(text, width: inner) {
+                print("  " + style("│", "2") + " " + (index == 0 ? style(row, "1") : row)
+                    + String(repeating: " ", count: max(0, inner - row.count)) + " " + style("│", "2"))
+            }
+        }
+        print("  " + style("└" + String(repeating: "─", count: inner + 2) + "┘", "2"))
+    }
+    static func confirm(_ prompt: String, readInput: () -> String? = { readLine() }) throws {
+        print()
+        line(prompt, style: "1")
+        detail("q to quit")
+        fflush(stdout)
+        while let input = readInput() {
+            let answer = input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if answer.isEmpty { return }
+            if answer == "q" { throw CancellationError() }
+            line("Press Enter to continue, or q to quit.")
+        }
+        throw CancellationError()
+    }
+}

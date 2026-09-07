@@ -14,6 +14,14 @@ struct Start: AsyncParsableCommand {
         """
     )
 
+    @Flag(help: "Continue first-time enrollment, account linkage, and model selection. Requires a terminal.")
+    var onboarding = false
+
+    @Flag(help: "Use opt-in Bubble Tea onboarding (requires the bundled companion and a terminal).")
+    var tui = false
+
+    var guidedOnboarding = false
+
     @OptionGroup var configOptions: ConfigOptions
 
     @Option(help: "Override coordinator WebSocket URL.")
@@ -61,6 +69,12 @@ struct Start: AsyncParsableCommand {
     }
 
     mutating func run() async throws {
+        if tui {
+            guard !foreground, !local, !localEndpoint, !all, model.isEmpty, idleTimeout == nil else {
+                throw ValidationError("--tui requires onboarding without serving-mode, model, or idle-timeout overrides.")
+            }
+            try BubbleTeaLauncher.launch(config: configOptions.config, coordinatorURL: coordinatorURL)
+        }
         Darkbloom.ensureLogging()
         if !foreground {
             printTermsNotice()
@@ -69,13 +83,28 @@ struct Start: AsyncParsableCommand {
         // --local (coordinator-less) and --local-endpoint (alongside the
         // coordinator) are mutually exclusive serve modes; reject the ambiguous
         // combination rather than silently picking one.
+        if onboarding && (foreground || local || localEndpoint || all || !model.isEmpty) {
+            throw ValidationError("--onboarding requires interactive start without serving-mode or model overrides.")
+        }
+        if onboarding && !OnboardingUI.isTerminal {
+            throw ValidationError("Onboarding requires a terminal. Run darkbloom start in a terminal to continue.")
+        }
         if local && localEndpoint {
             printError("--local and --local-endpoint are mutually exclusive: use --local for a coordinator-less local server, or --local-endpoint to serve a local endpoint alongside the coordinator.")
             throw ExitCode.failure
         }
 
+        let canResume = !foreground && !local && !localEndpoint && !all && model.isEmpty && OnboardingUI.isTerminal
+        let pending = canResume ? OnboardingState.load() : nil
+        let explicitConfig = configOptions.config
+        if configOptions.config == nil { configOptions.config = pending?.configPath }
         let snapshot = try loadRuntimeSnapshot(configOptions: configOptions)
-        let effectiveCoordinator = coordinatorURL ?? snapshot.config.coordinator.url
+        let pendingCoordinator = explicitConfig == nil ? pending?.coordinatorURL : nil
+        let requestedCoordinator = coordinatorURL
+            ?? ((!foreground && !local && !localEndpoint) ? pendingCoordinator : nil)
+            ?? snapshot.config.coordinator.url
+        // Standalone local serving does not use or validate a coordinator.
+        let effectiveCoordinator = local ? requestedCoordinator : try OnboardingState.webSocketURL(requestedCoordinator)
         var effectiveConfig = snapshot.config
         if let idleTimeout {
             if let problem = IdleUnloadPolicy.validate(minutes: idleTimeout) {
@@ -147,13 +176,21 @@ struct Start: AsyncParsableCommand {
                 runtimeCapabilities: runtimeCapabilities
             )
         } else {
-            try await launchDaemon(
-                snapshot: snapshot,
-                config: effectiveConfig,
-                coordinatorURL: effectiveCoordinator,
-                configPath: configOptions.config == nil ? nil : snapshot.configPath,
-                runtimeCapabilities: runtimeCapabilities
-            )
+            do {
+                try await launchDaemon(
+                    snapshot: snapshot,
+                    config: effectiveConfig,
+                    coordinatorURL: effectiveCoordinator,
+                    configPath: configOptions.config == nil ? nil : snapshot.configPath,
+                    runtimeCapabilities: runtimeCapabilities
+                )
+            } catch {
+                if guidedOnboarding {
+                    OnboardingUI.line("Setup is unfinished. Continue with: darkbloom start")
+                }
+                if error is CancellationError { throw ExitCode.failure }
+                throw error
+            }
         }
     }
 

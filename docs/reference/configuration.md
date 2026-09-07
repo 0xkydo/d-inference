@@ -1,6 +1,6 @@
 # Configuration reference
 
-> Last updated: 2026-09-06 · commit `8c22f0cdb`
+> Last updated: 2026-09-07 · commit `553137548`
 
 Every environment variable read by the coordinator, the provider CLI
 (`darkbloom`), console-ui and admin-ui: accepted values, the compiled default,
@@ -408,7 +408,19 @@ Internals and file format: [`ssd-kv-cache.md`](ssd-kv-cache.md).
 | `GITHUB_SHA` | commit | unset | `provider-swift/Sources/ProviderBenchmark/SchedulerPrefillDecisionCLI.swift` | Fallback source SHA in benchmark reports. |
 | `DYLD_INSERT_LIBRARIES`, `DYLD_LIBRARY_PATH`, `DYLD_FRAMEWORK_PATH`, `LD_PRELOAD`, `MallocStackLogging`, `MallocStackLoggingNoCompact`, `MallocScribble`, `MallocGuardEdges`, `MallocLogFile`, `MallocErrorAbort`, `NSZombieEnabled`, `OBJC_DEBUG_POOL_ALLOCATION`, `CFNETWORK_DIAGNOSTICS` | — | — | `provider-swift/Sources/ProviderCore/Security/EnvironmentScrubber.swift` | Removed from the daemon's environment at start; reported as the `env_scrubbed` capability. |
 
-`scripts/install.sh` additionally reads `COORD_URL` (substituted by the coordinator when it serves `/install.sh`; required when the script is run from source), `HOME` (install root `$HOME/.darkbloom`), `TMPDIR` (enrollment-profile temp dir only) and the two code-signing requirement constants `DARKBLOOM_DESIGNATED_REQUIREMENT` and `DARKBLOOM_FAN_HELPER_REQUIREMENT`. See [`../provider/installation.md`](../provider/installation.md).
+`scripts/install.sh` additionally reads `COORD_URL` (substituted by the coordinator when it serves `/install.sh`; required when the script is run from source), `HOME` (install root `$HOME/.darkbloom`), `TMPDIR` (temporary release archive) and the two code-signing requirement constants `DARKBLOOM_DESIGNATED_REQUIREMENT` and `DARKBLOOM_FAN_HELPER_REQUIREMENT`. The `--release-file FILE`
+installer option reads local candidate metadata instead of fetching the latest
+registered release; signing/hash/resource verification remains mandatory. See
+[the candidate test procedure](../developer/onboarding-test.md). The `--install-only`
+installer flag suppresses interactive onboarding. A fresh
+install keeps `~/.darkbloom/onboarding-pending` until the CLI starts the service;
+this records coordinator/model intent, not trust. Guided setup also persists the
+selected coordinator in `[coordinator].url` of the resolved TOML config
+(`provider-swift/Sources/darkbloom/Onboarding/OnboardingConfiguration.swift`).
+Startup schema migration preserves explicitly configured dev/local endpoints
+and does not copy an explicit `--config` file into the canonical config
+(`provider-swift/Sources/darkbloom/Darkbloom.swift`, `migrateConfigIfNeeded`). See
+[`../provider/installation.md`](../provider/installation.md).
 
 ## console-ui
 
@@ -461,3 +473,12 @@ These library controls apply to foreground processes and benchmark runs; they ar
 | `MLX_GPTOSS_MXFP4_DECODE_FAST_TAIL` | `1` enables, other explicit values disable | enabled only on physical `applegpu_g16s` | `libs/mlx-swift/Source/Cmlx/mlx/mlx/backend/metal/quantized.cpp` (`gather_qmv`): width-2880 MXFP4 gathered matrix-vector path with a masked 320-element tail. Exact shape/dtype gates retain the general fallback. |
 | `MLX_GPTOSS_MXFP4_PREFILL_TILE` | `m32n32k32`; other values use legacy | legacy | `libs/mlx-swift/Source/Cmlx/mlx/mlx/backend/metal/gptoss_mxfp4_policy.h` (`gptoss_mxfp4_prefill_tile`): optional 32-row tile for matching sorted expert prefill shapes. Small workstation gains do not establish a universal default. |
 | `DARKBLOOM_GPTOSS_COMPILED_EXPERTS` | `1` enables | disabled | `libs/mlx-swift-lm/Libraries/MLXLLM/Models/GPTOSS+CompiledExperts.swift` (`GPTOSSCompiledExpertsPolicy`): compile single-token B=1/2/4 expert graphs for exact 20B shapes. The global `MLX_COMPILED_DECODE=0` rollback still disables this path. Batch-dependent timing is mixed; weights remain live through weak updatable state. |
+
+## Onboarding frontend selection
+
+Bubble Tea uses the explicit `darkbloom start --tui` or installer `--tui` flag,
+not a persistent environment setting. It reuses the provider TOML and pending
+onboarding intent. See [the CLI reference](../provider/cli-reference.md) and
+[session architecture](../architecture/components/provider-onboarding.md).
+`GO_BIN` optionally selects the Go executable for `scripts/build-provider-tui.sh`;
+it is development tooling and is not forwarded to the provider.
