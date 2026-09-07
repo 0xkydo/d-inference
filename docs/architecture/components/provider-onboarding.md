@@ -1,6 +1,6 @@
 # Provider onboarding session
 
-> Last updated: 2026-09-07 · commit `25aa5b0b9`
+> Last updated: 2026-09-07 · commit `4314668d6`
 
 The opt-in `darkbloom start --tui` frontend runs Bubble Tea while a foreground
 session in the existing Swift executable owns onboarding. The provider still
@@ -69,6 +69,13 @@ behavior while keeping its failure visible.
 Progress distinguishes `transferring`, `verifying`, `publishing`, and
 `completed`. Byte totals alone never advance onboarding to Ready. Go displays
 the latest file progress; Swift owns both artifact integrity and eligibility.
+
+While `enrollment_pending`, the frontend schedules a `refresh` every two
+seconds after the preceding snapshot. It suppresses checks during another
+operation and discards timers from an older revision. Confirmed macOS enrollment
+advances the screen, but browser login still requires Enter. The header and
+five-step indicator in `provider-tui/layout.go` (`setupHeader`) remain visible
+along with the primary action while the body scrolls.
 
 ## Invariants
 

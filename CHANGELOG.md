@@ -2,6 +2,7 @@
 
 ## Unreleased: CLI onboarding
 
+- Show a persistent onboarding header, five-step progress and a prominent next action. Detect macOS enrollment approval automatically; browser login still requires Enter. Add `reset.sh --all` for full local state, shared model-cache and downloaded-installer cleanup.
 - Add opt-in `darkbloom start --tui` and installer `--tui` handoff using a bundled Bubble Tea companion and a narrow Swift session. Preserve explicit enrollment, account linkage and final Start actions; closing setup retains resumable downloads and leaves independently started providers running.
 - Separate download progress from terminal rendering; coordinate setup and shared model-cache writers across processes. Package and verify the companion as part of the existing signed app/update transaction.
 

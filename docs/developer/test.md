@@ -1,6 +1,6 @@
 # Test
 
-> Last updated: 2026-09-07 · commit `25aa5b0b9`
+> Last updated: 2026-09-07 · commit `4314668d6`
 
 How to run the unit tests for each component, the end-to-end suite that boots a
 real coordinator + Swift provider against ephemeral Postgres, and the docs
@@ -389,6 +389,11 @@ PTYs. It does not run the real installer, enrollment, login, provider Start, or
 trust operations; all fixture state is temporary. The PTY supervisor checks
 restored terminal settings before macOS revokes the slave on session exit,
 excluding only the kernel-maintained `PENDIN` bit.
+
+The terminal suite also checks automatic advance after fixture enrollment
+approval without opening login. Reset fixtures exercise `--all` inventory and
+model/installer cleanup in disposable directories, including preservation of
+unrelated files and refusal to follow a linked cache parent.
 
 After building Swift tests and staging the source-matched metallib, run:
 

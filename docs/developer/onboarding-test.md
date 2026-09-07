@@ -1,6 +1,6 @@
 # Test provider onboarding on a Mac
 
-> Last updated: 2026-09-07 · commit `9aec02d84`
+> Last updated: 2026-09-07 · commit `4314668d6`
 
 Test the real installer, device enrollment, account linkage, model downloads,
 and background startup on a physical Apple Silicon Mac. Use the reset script
@@ -15,8 +15,8 @@ Build with `make provider-build provider-tui-build` when needed, then run from
 the repository root:
 
 ```bash
-# Optional fresh-setup reset: bash scripts/onboarding/reset.sh --apply --cli /absolute/path/to/signed/darkbloom
-# Reset removes known local install/config/identity/log state, preserving shared models.
+# Optional full reset: bash scripts/onboarding/reset.sh --all --apply --cli /absolute/path/to/signed/darkbloom
+# Full reset removes local state, ALL default shared model caches and downloaded Darkbloom installers.
 # Skip reset to retain enrollment/login and test resume.
 provider-swift/.build/debug/darkbloom start --tui \
   --coordinator-url https://api.darkbloom.dev
@@ -30,6 +30,12 @@ APNs/MDA acceptance or verified serving. It does not replace the signed install.
 Any reset must use a working signed cleanup CLI; do not substitute the ad-hoc
 build to bypass a keychain cleanup failure. Remove the Darkbloom profile manually
 only when intentionally repeating fresh enrollment.
+
+After you approve the profile, Bubble Tea checks enrollment every two seconds
+and advances to account linkage automatically. Press Enter on that next screen
+to open the browser. A persistent header shows the five steps, marks completed
+steps, and highlights your current position. The primary action stays at the
+bottom; use Page Up/Down to read long text in a small terminal.
 
 ## Signed installer prerequisites
 
@@ -114,11 +120,23 @@ Close other onboarding sessions before resetting. The reset is for a fresh
 setup pass; skip it when checking resume or completed-install updates.
 
 ```bash
-bash scripts/onboarding/reset.sh
-bash scripts/onboarding/reset.sh --apply
+bash scripts/onboarding/reset.sh --all
+bash scripts/onboarding/reset.sh --all --apply
 ```
 
-The first command is read-only. The second stops the provider and watchdog,
+The first command is read-only. The second performs a **full local test reset**:
+it removes every `models--*` folder in the default shared Hugging Face cache,
+including all revisions, partial downloads and model locks, plus downloaded
+Darkbloom candidates, bundles and installers. Other apps using those model
+files will need to download them again. Source, local builds, the preserved
+cleanup tool, unrelated Downloads files and Hugging Face datasets stay.
+
+For the signed installer pass, this also deletes the candidate downloaded in
+step 1. After resetting, repeat its artifact download and metadata preparation
+before step 3; the successful workflow does not need to be rebuilt. Local UI
+iteration uses the preserved worktree build and needs no artifact download.
+
+It also stops the provider and watchdog,
 uninstalls an optional fan helper through its normal restore procedure, asks
 the installed CLI to remove identity keys, removes known local install/config/
 log/cache paths, and backs up shell files before removing exact installer PATH
@@ -130,8 +148,8 @@ Remove the **Darkbloom** profile in System Settings → General → Device Manag
 before reinstalling. This is a macOS user action. Keep other management profiles.
 Open a new terminal after the reset.
 
-Model files stay in the shared Hugging Face cache by default. To repeat an
-actual model download, pass exact catalog IDs, repeating the option as needed:
+Omit `--all` to keep shared models and downloaded installers. To remove only
+specific models instead of all models, pass exact catalog IDs:
 
 ```bash
 bash scripts/onboarding/reset.sh --remove-model 'org/model'
@@ -141,7 +159,7 @@ bash scripts/onboarding/reset.sh --apply --remove-model 'org/model'
 Replace `org/model` with an actual selected model ID. This deletes that model's
 whole shared cache folder, including other revisions and partial downloads;
 other apps using it will need to download it again. There is no blanket delete
-of the Hugging Face cache. Custom config/cache locations, browser sessions,
+of the Hugging Face cache for this targeted option. Custom config/cache locations, browser sessions,
 cloud account/history, shell backups, and macOS system logs remain. Clearing
 browser login is unnecessary to repeat the device-code account-link step.
 
@@ -176,8 +194,8 @@ for both input and output. Use the terminal emulator's transcript feature.
 To resume without removing any state:
 
 ```bash
-# Fresh-setup reset alternative only: bash scripts/onboarding/reset.sh --apply
-# Scope: the local install/config/identity/log paths listed above; shared models stay.
+# Fresh-setup reset alternative only: bash scripts/onboarding/reset.sh --all --apply
+# Scope: local state, all default shared model caches and downloaded Darkbloom installers.
 # Do not reset when testing resume or completed-install updates.
 darkbloom start --tui
 ```
@@ -247,6 +265,7 @@ APNs/MDA acceptance, or successful network inference.
 
 Captured terminal previews use those disposable services and fixture catalog
 data: [enrollment](../assets/bubbletea-stage-one/enrollment.png),
+[account linkage](../assets/bubbletea-stage-one/account.png),
 [model selection](../assets/bubbletea-stage-one/models.png), and
 [explicit Start](../assets/bubbletea-stage-one/ready.png).
 
