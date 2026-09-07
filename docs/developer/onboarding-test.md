@@ -203,6 +203,11 @@ These fixture tests do not need a reset: they use disposable state and injected
 services. They establish workflow/terminal behavior, not signed identity,
 APNs/MDA acceptance, or successful network inference.
 
+Captured terminal previews use those disposable services and fixture catalog
+data: [enrollment](../assets/bubbletea-stage-one/enrollment.png),
+[model selection](../assets/bubbletea-stage-one/models.png), and
+[explicit Start](../assets/bubbletea-stage-one/ready.png).
+
 Stage the source-matched metallib first as described in [test.md](test.md).
 These automated checks cover composition, terminal input, fit estimates,
 update guards, verified downloads, and cleanup failure handling. Real macOS
