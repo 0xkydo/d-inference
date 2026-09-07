@@ -1,6 +1,6 @@
 # Reports — dated records
 
-> Last updated: 2026-09-05 · commit `94c7c31eb`
+> Last updated: 2026-09-07 · commit `fdb2edd28`
 
 Frozen records: incident analyses, measurements, experiment results, and
 migration records. Each file describes the code **as it was on its date**; none
@@ -10,6 +10,12 @@ what was decided and whether it shipped read [`../design/README.md`](../design/R
 
 File names start with the date of the work (`YYYY-MM-DD-slug.md`). Each file's
 freshness stamp carries its own date, not the current one.
+
+## Provider interface research
+
+| Date | Report | One line |
+|---|---|---|
+| 2026-09-07 | [provider-interface-architecture-research](2026-09-07-provider-interface-architecture-research.md) | Product inputs, source findings, macOS precedents, technical reviews and deferred alternatives behind the Bubble Tea/native-app design |
 
 ## Incidents and root causes
 
