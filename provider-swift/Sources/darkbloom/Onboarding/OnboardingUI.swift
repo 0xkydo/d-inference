@@ -1,13 +1,14 @@
 import Foundation
 import Darwin
-import ArgumentParser
 
 /// Small shared terminal vocabulary. No color or cursor controls in logs.
 enum OnboardingUI {
     static var isTerminal: Bool { isatty(STDIN_FILENO) != 0 && isatty(STDOUT_FILENO) != 0 }
     static var usesColor: Bool {
-        isatty(STDOUT_FILENO) != 0 && ProcessInfo.processInfo.environment["NO_COLOR"] == nil
-            && ProcessInfo.processInfo.environment["TERM"] != "dumb"
+        supportsColor(terminal: isatty(STDOUT_FILENO) != 0, environment: ProcessInfo.processInfo.environment)
+    }
+    static func supportsColor(terminal: Bool, environment: [String: String]) -> Bool {
+        terminal && (environment["NO_COLOR"] ?? "").isEmpty && environment["TERM"] != "dumb"
     }
     static var width: Int {
         var size = winsize()
@@ -40,19 +41,23 @@ enum OnboardingUI {
     static func line(_ text: String = "", style code: String? = nil) {
         for row in wrapped(text) { print("  " + (code.map { style(row, $0) } ?? row)) }
     }
-    static func heading(_ text: String) { print(); line(text, style: "1") }
+    static func heading(_ text: String) { print(); line(text, style: "1;36") }
+    static func instruction(_ text: String) { line(text, style: "36") }
+    static func success(_ text: String) { line(text, style: "32") }
     static func box(title: String, paragraphs: [String]) {
         let inner = min(68, width - 4)
-        print("  ┌" + String(repeating: "─", count: inner + 2) + "┐")
-        for text in [title, ""] + paragraphs.flatMap({ [$0, ""] }) {
+        print("  " + style("┌" + String(repeating: "─", count: inner + 2) + "┐", "36"))
+        for (index, text) in ([title, ""] + paragraphs.flatMap({ [$0, ""] })).enumerated() {
             for row in wrapped(text, width: inner) {
-                print("  │ " + row + String(repeating: " ", count: max(0, inner - row.count)) + " │")
+                print("  " + style("│", "36") + " " + (index == 0 ? style(row, "1;36") : row)
+                    + String(repeating: " ", count: max(0, inner - row.count)) + " " + style("│", "36"))
             }
         }
-        print("  └" + String(repeating: "─", count: inner + 2) + "┘")
+        print("  " + style("└" + String(repeating: "─", count: inner + 2) + "┘", "36"))
     }
     static func confirm(_ prompt: String, readInput: () -> String? = { readLine() }) throws {
-        line(prompt + " (q to quit)", style: "36")
+        print()
+        line(prompt + " (q to quit)", style: "1;36")
         fflush(stdout)
         while let input = readInput() {
             let answer = input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()

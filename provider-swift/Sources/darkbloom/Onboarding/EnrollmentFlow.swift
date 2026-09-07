@@ -15,31 +15,40 @@ enum EnrollmentFlow {
         ])
     }
 
-    static func run(coordinatorURL: String, noOpen: Bool = false, waitForCompletion: Bool) async throws {
-        let state = checkMDMEnrollment(coordinatorURL: coordinatorURL)
+    static func run(coordinatorURL: String, noOpen: Bool = false, waitForCompletion: Bool,
+                    interactive: Bool = OnboardingUI.isTerminal,
+                    checkEnrollment: (String) -> MDMEnrollmentState = { checkMDMEnrollment(coordinatorURL: $0) },
+                    confirm: (String) throws -> Void = { try OnboardingUI.confirm($0) },
+                    enroll: (String, Bool) async throws -> EnrollmentResult = {
+                        try await EnrollmentService().enroll(coordinatorURL: $0, openSystemSettings: $1)
+                    }) async throws {
+        let state = checkEnrollment(coordinatorURL)
         if state.isDarkbloom {
-            OnboardingUI.line("Device enrollment verified.")
+            OnboardingUI.success("Device enrollment verified.")
             return
         }
         if case .enrolledOtherMDM(let serverURL) = state {
             throw EnrollmentError.managedByOtherMDM(serverURL: serverURL)
         }
         explain()
-        let result = try await EnrollmentService().enroll(
-            coordinatorURL: coordinatorURL, openSystemSettings: !noOpen)
+        if interactive && !noOpen {
+            OnboardingUI.instruction("Next, Darkbloom will download the profile and open System Settings. You approve its installation there.")
+            try confirm("Press Enter to open device enrollment")
+        }
+        let result = try await enroll(coordinatorURL, !noOpen)
         if result.alreadyEnrolled { return }
         OnboardingUI.line("Profile saved: \(result.profilePath.path)")
-        OnboardingUI.line("Open the profile, then go to System Settings → General → Device Management.")
-        OnboardingUI.line("Select the Darkbloom profile, click Install or Enroll, and follow the macOS prompts.")
+        OnboardingUI.instruction("Open the profile, then go to System Settings → General → Device Management.")
+        OnboardingUI.instruction("Select the Darkbloom profile, click Install or Enroll, and follow the macOS prompts.")
         guard waitForCompletion && !noOpen else {
             return
         }
-        OnboardingUI.line("After clicking OK in macOS, return here. Account linkage is next.")
+        OnboardingUI.instruction("After clicking OK in macOS, return here. Account linkage is next.")
         while true {
-            try OnboardingUI.confirm("Press Enter to check enrollment and continue")
-            switch checkMDMEnrollment(coordinatorURL: coordinatorURL) {
+            try confirm("Press Enter to check enrollment and continue")
+            switch checkEnrollment(coordinatorURL) {
             case .enrolledDarkbloom:
-                OnboardingUI.line("Device enrollment verified.")
+                OnboardingUI.success("Device enrollment verified.")
                 return
             case .enrolledOtherMDM(let serverURL):
                 throw EnrollmentError.managedByOtherMDM(serverURL: serverURL)

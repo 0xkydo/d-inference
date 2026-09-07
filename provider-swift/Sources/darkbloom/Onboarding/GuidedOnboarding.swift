@@ -11,7 +11,7 @@ enum GuidedOnboarding {
         login: () async throws -> Void
     ) async throws {
         OnboardingUI.heading("Set up Darkbloom")
-        OnboardingUI.line("Device enrollment → account linkage → models → start")
+        OnboardingUI.instruction("Device enrollment → account linkage → models → start")
         try await enroll()
         if hasAccount() {
             OnboardingUI.line("Using your saved account link.")

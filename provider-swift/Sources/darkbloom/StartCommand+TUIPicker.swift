@@ -45,7 +45,9 @@ extension Start {
             }
             for row in rows {
                 let highlight = row.hasPrefix("›") || row.contains("show/hide") || row.hasPrefix("▸") || row.hasPrefix("▾")
-                print("  " + (highlight ? OnboardingUI.style(row, "36") : row))
+                let heading = ["Choose models to download", "Downloaded", "Available to download", "Additional models"].contains(row)
+                print("  " + (heading ? OnboardingUI.style(row, "1;36")
+                    : highlight ? OnboardingUI.style(row, "36") : row))
             }
             fflush(stdout)
             previousRows = rows.count; previousWidth = OnboardingUI.width; previousHeight = height

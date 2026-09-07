@@ -3,9 +3,19 @@ import ProviderCore
 
 /// The same device-code login UI serves the standalone command and onboarding.
 enum AccountLinkFlow {
-    static func run(coordinatorURL: String) async throws {
+    static func run(coordinatorURL: String, interactive: Bool = OnboardingUI.isTerminal,
+                    confirm: (String) throws -> Void = { try OnboardingUI.confirm($0) },
+                    login: (String) async throws -> Void = { try await loginInBrowser(coordinatorURL: $0) }) async throws {
         OnboardingUI.heading("Link your Darkbloom account")
         OnboardingUI.line("Link this Mac to receive earnings for serving inference.")
+        if interactive {
+            try confirm("Press Enter to open account linkage in your browser")
+        }
+        try await login(coordinatorURL)
+        OnboardingUI.success("Account linked.")
+    }
+
+    private static func loginInBrowser(coordinatorURL: String) async throws {
         try await performDeviceCodeLogin(
             coordinatorURL: coordinatorURL,
             onDisplayCode: { code, uri, expiresIn in
@@ -17,6 +27,5 @@ enum AccountLinkFlow {
                 OnboardingUI.line("Return here after approval; setup continues automatically.")
             },
             onPollTick: {})
-        OnboardingUI.line("Account linked.")
     }
 }
