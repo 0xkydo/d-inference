@@ -104,7 +104,7 @@ type Quote struct {
 
 func (q Quote) Validate(req PaymentRequest) error {
 	if !strings.HasPrefix(q.ID, "obpq_") || q.Amount != req.Amount || q.From.FinancialAccount != req.From["financial_account"] || q.From.Debited.Currency != "usd" || q.From.Debited.Value != req.Amount.Value || q.To.Recipient != req.To["recipient"] || q.To.PayoutMethod != req.To["payout_method"] || q.To.Credited.Currency != req.To["currency"] || q.To.Credited.Value <= 0 {
-		return fmt.Errorf("Stripe quote does not match the requested withdrawal")
+		return fmt.Errorf("stripe quote does not match the requested withdrawal")
 	}
 	return nil
 }
@@ -125,7 +125,7 @@ type PaymentStatusDetails struct {
 
 func (p Payment) Validate(req PaymentRequest) error {
 	if !strings.HasPrefix(p.ID, "obp_") || p.Amount != req.Amount || p.From.FinancialAccount != req.From["financial_account"] || p.To.Recipient != req.To["recipient"] || p.To.PayoutMethod != req.To["payout_method"] {
-		return fmt.Errorf("Stripe payment does not match the withdrawal")
+		return fmt.Errorf("stripe payment does not match the withdrawal")
 	}
 	return nil
 }

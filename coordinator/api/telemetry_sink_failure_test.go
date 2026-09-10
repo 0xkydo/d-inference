@@ -56,15 +56,15 @@ func waitForDrops(t *testing.T, sink *telemetrySink, n int64) {
 	t.Fatalf("waited for dropped >= %d, got %d", n, sink.dropped.Load())
 }
 
-func (f *faultingTelemetryStore) fault() (error, bool, string) {
+func (f *faultingTelemetryStore) fault() (bool, string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.batchErr, f.panicBatch, f.panicRecord
+	return f.panicBatch, f.panicRecord, f.batchErr
 }
 
 func (f *faultingTelemetryStore) RecordInferenceRoutes(rs []*store.InferenceRouteRecord) error {
 	f.note(fmt.Sprintf("records:%d", len(rs)))
-	err, panics, _ := f.fault()
+	panics, _, err := f.fault()
 	if panics {
 		panic("injected batch panic")
 	}
@@ -75,7 +75,7 @@ func (f *faultingTelemetryStore) RecordInferenceRoutes(rs []*store.InferenceRout
 }
 
 func (f *faultingTelemetryStore) RecordInferenceRoute(r *store.InferenceRouteRecord) error {
-	if _, _, id := f.fault(); id != "" && r.RequestID == id {
+	if _, id, _ := f.fault(); id != "" && r.RequestID == id {
 		f.note("record")
 		panic("injected row panic")
 	}
@@ -84,7 +84,7 @@ func (f *faultingTelemetryStore) RecordInferenceRoute(r *store.InferenceRouteRec
 
 func (f *faultingTelemetryStore) UpdateInferenceRouteOutcomes(us []store.InferenceRouteOutcomeUpdate) error {
 	f.note(fmt.Sprintf("updates:%d", len(us)))
-	err, panics, _ := f.fault()
+	panics, _, err := f.fault()
 	if panics {
 		panic("injected batch panic")
 	}

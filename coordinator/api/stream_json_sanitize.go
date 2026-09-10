@@ -8,9 +8,7 @@ func sseDataValue(line string) (string, bool) {
 	field, value := line, ""
 	if colon >= 0 {
 		field, value = line[:colon], line[colon+1:]
-		if strings.HasPrefix(value, " ") {
-			value = value[1:]
-		}
+		value = strings.TrimPrefix(value, " ")
 	}
 	return value, field == "data"
 }

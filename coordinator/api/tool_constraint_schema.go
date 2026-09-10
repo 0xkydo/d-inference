@@ -369,9 +369,7 @@ func constrainedJSONInteger(number json.Number) bool {
 		_, err := number.Int64()
 		return err == nil
 	}
-	if strings.HasPrefix(raw, "-") {
-		raw = strings.TrimPrefix(raw, "-")
-	}
+	raw = strings.TrimPrefix(raw, "-")
 	_, err := constrainedExactNonnegativeInt(raw)
 	return err == nil
 }

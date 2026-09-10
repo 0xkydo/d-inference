@@ -148,7 +148,7 @@ func knownZeroTokenBudget(maxTokens, kvBytesPerToken int64) bool {
 // pending charge must reject against every finite pool, so saturation at
 // MaxInt64 is both conservative and sufficient for admission/capacity math.
 func addPooledKVByteCharge(total, tokens, rate int64) int64 {
-	if total >= math.MaxInt64 {
+	if total == math.MaxInt64 {
 		return math.MaxInt64
 	}
 	if tokens <= 0 || rate <= 0 {

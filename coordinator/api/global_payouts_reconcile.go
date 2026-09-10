@@ -20,7 +20,7 @@ import (
 func (s *Server) syncGlobalPayout(ctx context.Context, id string) error {
 	repo, ok := s.globalPayoutStore()
 	if !ok || s.billing.GlobalPayouts() == nil {
-		return errors.New("Global Payouts unavailable")
+		return errors.New("global payouts unavailable")
 	}
 	claimed, err := repo.ClaimGlobalPayout(id, time.Now())
 	if err != nil {

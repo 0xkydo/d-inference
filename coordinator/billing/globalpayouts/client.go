@@ -70,7 +70,7 @@ func (c *Client) do(ctx context.Context, method, path, account, key string, body
 	}
 	r, err := c.HTTP.Do(req)
 	if err != nil {
-		return fmt.Errorf("Stripe Global Payouts transport: %w", err)
+		return fmt.Errorf("stripe global payouts transport: %w", err)
 	}
 	defer r.Body.Close()
 	b, err := io.ReadAll(io.LimitReader(r.Body, 2<<20))
@@ -87,7 +87,7 @@ func (c *Client) do(ctx context.Context, method, path, account, key string, body
 		return &Error{Status: r.StatusCode, Code: envelope.Error.Code}
 	}
 	if err := json.Unmarshal(b, out); err != nil {
-		return fmt.Errorf("Stripe Global Payouts response: %w", err)
+		return fmt.Errorf("stripe global payouts response: %w", err)
 	}
 	return nil
 }
@@ -128,7 +128,7 @@ func (c *Client) recipientLink(ctx context.Context, id, returnURL, refreshURL, u
 	}
 	err := c.do(ctx, "POST", "/v2/core/account_links", "", "", body, &result)
 	if err == nil && result.URL == "" {
-		err = fmt.Errorf("Stripe returned an empty onboarding link")
+		err = fmt.Errorf("stripe returned an empty onboarding link")
 	}
 	return result.URL, err
 }
