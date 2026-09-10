@@ -1,6 +1,6 @@
 # Megafile decomposition — target file map and move-only rules
 
-> Last updated: 2026-09-10 · commit `c4d8b7b9c`
+> Last updated: 2026-09-10 · commit `63a468e29`
 
 Status: In progress — 2026-09-10 (Shard B2 of [repo-cleanup.md](repo-cleanup.md); sub-shards land as separate PRs)
 
@@ -54,7 +54,7 @@ cost and lets later shards own one concern each.
 |---|---|---|
 | B2a | `api/consumer.go` | #6 |
 | B2b | `api/dispatch.go`, `api/provider.go` | #7 |
-| B2c | `api/server.go` | — |
+| B2c | `api/server.go` | #8 |
 | B2d | `registry/registry.go`, `registry/scheduler.go` | — |
 | B2e | `store/postgres.go` | — |
 
@@ -115,12 +115,40 @@ Note: `HandleMDMWebhook` stays with the body-limit constants it reads only if
 its two callers are the router and tests; if `admin_*.go` siblings already
 own MDM webhook code, place it there instead and record the deviation.
 
-### 4.5–4.6
+### 4.5 `registry/registry.go` → 9 files
 
-Maps for `registry.go`, `scheduler.go`, and `postgres.go` are
-added to this record by the PR that opens each sub-shard, using the outline in
-the cleanup inventory and the same assignment rule. A sub-shard PR may not
-start until its map is in this file.
+| Target | Concern | Anchors (line ranges at `4742dc9a`) |
+|---|---|---|
+| `registry.go` | `Registry` struct, constructor, enums, dispatch-load cooldown, catalog/alias resolution, misc small setters | `ProviderStatus` + `Status*`, `TrustLevel` + `Trust*`, `BackendMLXSwift`, `MaxFailedChallenges`, `BackendUsesSwiftRuntime`, `Registry` 2132–2344, `pendingModelLoad*`/`dispatchLoadCooldownTTL` consts 2348–2374, `modelLoadAction`, `New`, `ConfigureCacheRouting`, `CacheRoutingConfigSnapshot`, `RecordDispatchLoadFailure`, `ClearDispatchLoadCooldown`, both `dispatchLoadCooled`, `TruncHash`, `trustMeetsMinimum`, `Queue`, `SetQueue`, `DefaultMaxConcurrent`, `SetProviderIdle`, `GetProvider`, `ForEachProvider`, `ProviderIDs`, `SetHardUntrustHook`, `SetRuntimeCapabilitiesPromotedHook`, `notifyRuntimeCapabilitiesPromoted`, `HoldWriteLockForTest`, `CloneStringMap`, `trustRank` |
+| `pending_request.go` | `PendingRequest` handle and its ingress/timing/finalization methods | `ProviderChunk`, `PendingRequest` 79–306 and every `(pr *PendingRequest)` method 310–751, `TokenAdmission` + `TracksOutput`, `RequestTiming` |
+| `provider.go` | `Provider` struct, pending bookkeeping, concurrency accounting, private-text support | `DeviceEvidence`, `ApplicationEvidence`, `Provider` 814–1056, `providerSupportsPrivateText*Locked` + `privateTextBackendSupported` 1064–1134, `AddPending` … `MarkPendingCompletionIngressNow` 1137–1219, `Mu`, `pendingCount`, `PendingCount`, `MaxConcurrency`, `MaxConcurrencyForModel`, `ReportedTokenBudgetMaxForModel`, `maxConcurrency`, `maxConcurrencyForModelLocked`, `pendingCountForModelLocked`, `hasReportedMaxConcurrencyForModelLocked`, `pendingLoadForModelLocked`, `RecordLatency` (Provider receiver) |
+| `provider_trust.go` | Per-provider attestation/trust state mutators and accessors | `SetAttested`, `reconcileRuntimeCapabilities`, `GrantHardware*`, `GrantApplicationEvidenceIfNotUntrusted`, `ApplicationEvidenceSnapshot`, `ClearApplicationEvidence`, `GetTrustLevel`, `GetStatus`, `SetMDMFailureReason`, `GetMDMFailureReason`, `SetMDAProofIfHardware*`, `StagedMDAChain`, `StageMDAChainFromJSON`, `SetLastChallengeVerified`, `GetLastChallengeVerified`, `GetChallengeVerifiedSIP`, `SetChallengeVerifiedSIP`, `SetCodeAttested`, `SetFreshCodeAttested`, `GrantProcessCodeAttested`, `RequiresFreshRuntimeCodeProof`, `GetFreshCodeAttested`, `CodeIdentityState`, `GrantCodeAttestedIf`, `GetCodeAttested`, `ChallengeShouldStop`, `SignalApplicationProofSettled`, `ApplicationProofSettledChan`, `RequestImmediateChallenge`, `ImmediateChallengeChan`, `HardUntrustEpoch`, `SetAttestationResult`, `RebindStableFaultKey`, `GetAttestationResult` |
+| `registry_trust_policy.go` | Registry-level code-attestation / release-policy knobs, untrust and challenge outcomes | `SetCodeAttestationConfigured`, `SetCodeAttestationDeadline`, `SetCodeAttestationPolicy`, `SetReleasePolicyGeneration`, `providerHoldsCurrentApplicationEvidenceLocked`, `SetReleasePolicyEnforcement`, `SetReleasePolicyEnforceAfter`, `releasePolicyEnforced*Locked`, `ReleasePolicyEnforced`, `ModelEvidenceCoverage`, `ApplicationEvidenceModelCoverage`, `CountProvidersWithCurrentApplicationEvidence`, `CodeAttestationConfigured`, `CodeAttestationEnforced`, `codeAttestationEnforced*Locked`, `MarkUntrusted`, `MarkUntrustedTransient`, `markUntrusted`, `SetTrustLevel`, `RecordChallengeSuccess`, `recoverIfTransientlyUntrusted`, `RecordChallengeFailure`, `CodeAttestationCoverage`, `CountProvidersByBinaryHash` |
+| `registry_catalog.go` | Model catalog, aliases, resolution, routability, catalog-derived sizes | `CatalogEntry`, `SetModelCatalog`, `AliasTarget` (type + method), `SetModelAliases`, `PublicNameForBuild`, `IsAlias`, `ResolveModel*`, `anyProviderCanServeAliasWithTraitsLocked`, `providerStructurallyCanRouteBuildLocked`, `providerCanRouteBuildLocked`, `anyProviderCanRouteBuildLocked`, `MergeProviderModels*`, `mergeProviderModels`, `RoutableProviderIDsForBuild`, `ModelType`, `IsModelInCatalog`, `UpdateModelWeightHashes`, `CatalogWeightHash`, `IsAliasLineageBuild`, `modelAllowedByCatalogLocked`, `providerServesCatalogModelLocked`, `modelTrackedByCatalogLocked`, `modelServableForOwnerLocked`, `providerServesOwnedRoutableModelLocked`, `providerServesVisionModelLocked`, `HasVisionProviderForModel`, `catalogSizeGBLocked`, `advertisedModelSizeGBLocked`, `modelSizeGBForFitLocked`, `catalogMinRAMGbLocked`, `modelProviderInc`, `modelProviderDec` |
+| `registry_lifecycle.go` | Register, heartbeat (with stat clamps), disconnect, eviction | `max*` sanity-cap consts 3488–3496, `clampNonNeg`, `clampBackendCapacity`, `maxTelemetry*` consts, `clampTelemetryInt64`, `clampTelemetryCount`, `Register`, `DisconnectDuplicatesBySerial`, `RemoveProviderBySerial`, `Heartbeat`, `cumulativeDelta`, `applyHeartbeatStatsDelta`, `mergeHeartbeatSessionStats`, `Disconnect`, `disconnectWithCause`, `disconnectProvider`, `StartEvictionLoop`, `evictStale`, `evictStrikeThreshold`, `durationStats`, `RecordJobSuccess`, `RecordLatency` (Registry receiver), `RecordJobFailure` |
+| `registry_model_loads.go` | Load/prefetch/desired-model messages and pending model-load reservations | `SendLoadModel`, `SendPrefetchModel`, `SendDesiredModels`, `desiredModelEntriesEqual`, `recordDesiredModelsSent`, `DesiredModelsForProvider`, `TriggerModelSwaps`, `expirePendingModelLoads`, `planModelLoadActions`, `hasWarmProviderLocked`, `providerHasWarmModelLocked`, `bestModelLoadProviderLocked`, `modelLoadCandidatePendingLocked`, `reservePendingModelLoads`, `sendModelLoadActions`, `providerHasPendingLoad`, `ClearIneligiblePendingModelLoads`, `MarkModelWarm`, `ClearPendingModelLoad`, `PendingModelLoadDuration`, `HasPendingModelLoad`, `backoffPendingModelLoad`, `BackoffPendingModelLoadFor*`, `RejectUnservableQueuedRequests` |
+| `registry_snapshots.go` | Read-only aggregate views for admin/console/metrics | `AttestationSummary`, `AggregateModel`, `ListModels`, `OwnedModels`, `ModelCountryCodes`, `OnlineCount`, `ModelProviderSnapshot`, `ProviderCount`, `ProviderCountByVersion`, `TrustStatusCount`, `ProviderCountByTrustStatus`, `ProviderCountByMDMFailure`, `FleetSnapshot`, `Snapshot`, `ModelCapacity`, `providerCapSnap`, `publiclyRoutableLocked`, `ModelCapacitySnapshot` |
+
+Collision check: `provider_snapshot.go`, `provider_capabilities.go`,
+`provider_breaker.go`, `provider_writer.go`, `pending_terminal.go` already
+exist — the new `provider.go` / `pending_request.go` names are free at
+`4742dc9a`; verify before creating.
+
+### 4.6 `registry/scheduler.go` → 5 files
+
+| Target | Concern | Anchors (line ranges at `4742dc9a`) |
+|---|---|---|
+| `scheduler.go` | Penalty constants, snapshot/candidate types, `RoutingDecision`, reserve entry points and commit | consts 17–99, `routingSnapshot`, `routingCandidate`, `candidateRejection` + `reject*`, `modelMemoryHeadroomFactor`, `modelFitsHardware`, `costBreakdown`, `RoutingDecision`, `ReserveProvider`, `ReserveProviderEx`, `reservationCommitOutcome` + consts, `providerReservationScan`, `reserveProvider`, `scanProviderReservation`, `commitProviderReservation`, `currentTTFTShadow`, `routingDecisionFor*`, `addRoutingRejections`, `OwnedProviderSummary`, `logRoutingDecision` |
+| `scheduler_scan.go` | Candidate scan, ranking, tie-break, gates | `applyCacheRoutingDiscount*`, `applyCacheHintDiscount`, `selectBestCandidateLockedFull`, `shouldBypassBreakerFailOpen`, `candidateScan` + methods, `scanCandidatesLocked`, `selectBestCandidateScanLocked`, `selectRoutingCandidate`, `tieBreakPath`, `lowestCostOther`, `providerMatchesAllowedSerial`, `providerOwnedBy`, `providerVersion`, `providerPassesRoutingGates*`, `providerRoutingGateReasonLockedEx`, `gateStateReasonLocked`, `providerModelIDs`, `providerCanAdmitLockedEx` |
+| `scheduler_snapshot.go` | Per-provider routing snapshot construction and memory admission | section `---- System-profiler routing context` if it introduces moved decls, `snapshotProviderInto*`, `heartbeatAgeMs`, `coldLoadCatalogGBToMemGiB`, `backendFreeForLoadGB`, `reportedFreeForLoadAdmits`, `freeMemoryAdmits`, `fillSnapshotPendingAndPool`, `pendingTokenBudget`, `committedTokenBudget`, `snapshotOccupancy` |
+| `scheduler_cost.go` | Cost model: candidate build, penalties, TPS resolution, tunables | `buildCandidateWithReason`, `buildCandidateInto`, `slotStatePenalty`, `slotStateModelLoaded`, `backlogTokenMs`, `healthPenaltyMs`, `resolveEffectiveTPS`, `resolvePrefillTPS`, `effectiveDecodeTPS`, `resolvedDecodeTPS`, `resolvedModelTPSLocked`, `defaultPrefillToDecodeRatio` … `LongPromptPrefillWeight` 2515–2621, `longPromptPenalty`, `resolvedPrefillTPS`, `projectedPerRequestDecodeTPS*`, `decodeFloorUseFleetMedian`, `estimatedTTFTFromSnapshot`, `ttftMsFromSnapshot`, `occupancyAwareTTFTMsFromSnapshot`, `ttftOccupancyMs`, `queuedPrefillTokensAhead` |
+| `scheduler_queue.go` | Quick capacity check and queue drain | `QuickCapacityCheck*`, `quickCapacityCheck`, `DrainQueuedRequests*`, `drainQueuedRequestsForModels*`, `drainModelQueue`, `drainModelQueuePass` |
+
+### 4.7
+
+The map for `postgres.go` is added to this record by the PR that opens that
+sub-shard, using the outline in the cleanup inventory and the same assignment
+rule. A sub-shard PR may not start until its map is in this file.
 
 ## 5. Deferred (explicitly out of this shard)
 
