@@ -1,6 +1,6 @@
 # Megafile decomposition — target file map and move-only rules
 
-> Last updated: 2026-09-10 · commit `63a468e29`
+> Last updated: 2026-09-10 · commit `45c44a6de`
 
 Status: In progress — 2026-09-10 (Shard B2 of [repo-cleanup.md](repo-cleanup.md); sub-shards land as separate PRs)
 
@@ -55,7 +55,7 @@ cost and lets later shards own one concern each.
 | B2a | `api/consumer.go` | #6 |
 | B2b | `api/dispatch.go`, `api/provider.go` | #7 |
 | B2c | `api/server.go` | #8 |
-| B2d | `registry/registry.go`, `registry/scheduler.go` | — |
+| B2d | `registry/registry.go`, `registry/scheduler.go` | #9 |
 | B2e | `store/postgres.go` | — |
 
 ## 4. Target file maps
@@ -144,11 +144,27 @@ exist — the new `provider.go` / `pending_request.go` names are free at
 | `scheduler_cost.go` | Cost model: candidate build, penalties, TPS resolution, tunables | `buildCandidateWithReason`, `buildCandidateInto`, `slotStatePenalty`, `slotStateModelLoaded`, `backlogTokenMs`, `healthPenaltyMs`, `resolveEffectiveTPS`, `resolvePrefillTPS`, `effectiveDecodeTPS`, `resolvedDecodeTPS`, `resolvedModelTPSLocked`, `defaultPrefillToDecodeRatio` … `LongPromptPrefillWeight` 2515–2621, `longPromptPenalty`, `resolvedPrefillTPS`, `projectedPerRequestDecodeTPS*`, `decodeFloorUseFleetMedian`, `estimatedTTFTFromSnapshot`, `ttftMsFromSnapshot`, `occupancyAwareTTFTMsFromSnapshot`, `ttftOccupancyMs`, `queuedPrefillTokensAhead` |
 | `scheduler_queue.go` | Quick capacity check and queue drain | `QuickCapacityCheck*`, `quickCapacityCheck`, `DrainQueuedRequests*`, `drainQueuedRequestsForModels*`, `drainModelQueue`, `drainModelQueuePass` |
 
-### 4.7
+### 4.7 `store/postgres.go` → 10 files
 
-The map for `postgres.go` is added to this record by the PR that opens that
-sub-shard, using the outline in the cleanup inventory and the same assignment
-rule. A sub-shard PR may not start until its map is in this file.
+| Target | Concern | Anchors (line ranges at `45c44a6d`) |
+|---|---|---|
+| `postgres.go` | `PostgresStore` type, constructor, close, schema migration and DDL constants, shared scan helpers | `_` interface assertion 32, `PostgresStore`, `cachedPrice`, `NewPostgres`, `newPostgresWithPoolConfig`, `Close`, `legacyCacheAffinity*` consts 110–145, `migrate` 148–1205, `ensureProviderEarningsJobIndex`, `hashKey`, `HashKey`, `rowScanner`, `encodeModelList`, `decodeModelList`, `pgQuerier`, `nullSince`, `nullableCreatedAt`, `requestProfiles*DDL` 5626–5774, `fleetSnapshots*DDL` 5776–5851 |
+| `postgres_apikeys.go` | API key CRUD, validation, rotation, spend | `apiKeyColumns`, `scanAPIKeyRow`, `insertAPIKey`, `CreateKey`, `CreateKeyForAccount`, `CreateAPIKey`, `SeedKey`, `GetKeyAccount`, `ValidateKey`, `ValidateKeyFull`, `AuthenticateKey`, `ListAPIKeys`, `GetAPIKeyByID`, `UpdateAPIKey`, `RevokeAPIKeyByID`, `RotateAPIKey`, `TouchAPIKey`, `KeySpendSince`, `RevokeKey`, `KeyCount` |
+| `postgres_usage.go` | Usage records, inference routes, rejections, payments, totals, leaderboard | `RecordUsage`, `UsageByConsumer`, `RecordUsageWithCost`, `RecordUsageWithCostAndLocation`, `RecordUsageFull`, `RecordUsageFullWithPublicModel`, `inferenceRouteSelectColumns`, `InferenceRouteRecordsSince`, `RecordRejection`, `RejectionRecordsSince`, `RecordPayment`, `UsageCountSince`, `UsageTotals`, `UsageTotalsSince`, `UsageTimeSeries`, `rewardLedgerTypesSQLList`, `Leaderboard`, `UsageRecords`, `UsageRecordsSince` |
+| `postgres_ledger.go` | Account balances, credit/debit, withdrawable ledger, referrals, billing sessions, model prices | `GetBalance`, `creditBalanceSQL`, `creditWithdrawableBalanceSQL`, `creditBalance`, `creditWithdrawableBalance`, `Credit`, `GetWithdrawableBalance`, `GetBalanceWithWithdrawable`, `CreditWithdrawable`, `CreditWithdrawableOnce`, `Debit`, `MigrateAccountBalance`, `DebitWithdrawable`, `LedgerHistory`, `CreateReferrer`, `GetReferrerByCode`, `GetReferrerByAccount`, `RecordReferral`, `GetReferrerForAccount`, `GetReferralStats`, `CreateBillingSession`, `GetBillingSession`, `CompleteBillingSession`, `IsExternalIDProcessed`, `SetModelPrice`, `GetModelPrice`, `ListModelPrices`, `DeleteModelPrice` |
+| `postgres_users.go` | Users, roles, Stripe account link, device codes, provider tokens, invite codes | `CreateUser`, `userSelectColumns`, `scanUser`, `wrapUserScanError`, `GetUserByPrivyID`, `GetUserByAccountID`, `SetUserStripeAccount`, `GetUserByStripeAccount`, `SetUserRole`, `SetUserPlatformFeePercent`, `GetUserByEmail`, `CreateDeviceCode`, `GetDeviceCode`, `GetDeviceCodeByUserCode`, `ApproveDeviceCode`, `DeleteExpiredDeviceCodes`, `CreateProviderToken`, `GetProviderToken`, `RevokeProviderToken`, `CreateInviteCode`, `GetInviteCode`, `ListInviteCodes`, `DeactivateInviteCode`, `RedeemInviteCode`, `HasRedeemedInviteCode` |
+| `postgres_stripe_withdrawals.go` | Stripe withdrawal lifecycle | `CreateStripeWithdrawal`, `CreateStripeWithdrawalWithDebit`, `stripeWithdrawalSelectColumns`, `scanStripeWithdrawal`, `GetStripeWithdrawal`, `GetStripeWithdrawalByPayoutID`, `GetStripeWithdrawalByTransferID`, `UpdateStripeWithdrawal`, `ListStripeWithdrawals`, `MarkStripeWithdrawalPaid`, `ReopenStripeWithdrawalAfterPayoutFailure`, `ListStripeWithdrawalsBySweepPayoutID`, `ListStripeWithdrawalsByStatus`, `ListStripeWithdrawalsForStripeAccount` |
+| `postgres_releases.go` | Provider release rows | `SetRelease`, `ListReleases`, `ListReleasesWithError`, `GetLatestRelease`, `DeleteRelease` |
+| `postgres_earnings.go` | Provider earnings and payouts | `RecordProviderEarning`, `GetProviderEarnings`, `GetAccountEarnings`, `GetProviderEarningsSummary`, `GetAccountEarningsSummary`, `RecordProviderPayout`, `ListProviderPayouts`, `SettleProviderPayout`, `CreditProviderAccount`, `CreditProviderWallet` |
+| `postgres_providers.go` | Provider records, reputation, code attestation, push budgets, trust reuse, provider sessions | `marshalProviderLocation`, `unmarshalProviderLocation`, `providerStatsJSON`, `UpsertProvider`, `GetProviderRecord`, `GetProviderBySerial`, `GetMDAChainBySerial`, `ListProviderRecords`, `ListProvidersByAccount`, `DeleteProvidersBySerial`, `UpdateProviderLastSeen`, `UpdateProviderTrust`, `UpdateProviderChallenge`, `UpdateProviderRuntime`, `UpsertReputation`, `GetReputation`, `ListCodeAttestations`, `UpsertCodeAttestation`, `DeleteCodeAttestation`, `ListCodeAttestPushBudgets`, `UpsertCodeAttestPushBudget`, `DeleteCodeAttestPushBudget`, `ReserveCodeAttestPushBudget`, `ClearCodeAttestPushFloor`, `ListProviderTrustReuse`, `UpsertProviderTrustReuse`, `RecoverProviderTrustReuse`, `RevokeProviderTrustReuse`, `AdvanceProviderTrustReuseCoverage`, `OpenProviderSession`, `TouchProviderSession`, `CloseProviderSession`, `CloseOpenProviderSessions` |
+| `postgres_verification.go` | Verification job queue and log reports | `verificationJobColumns`, `verificationJobScanner`, `scanVerificationJob`, `UpsertVerificationJob`, `nullableVerificationTime`, `GetVerificationJob`, `ListDueVerificationJobs`, `verificationDuePageHint`, `ListDueVerificationJobsPage`, `ClaimVerificationJob`, `ReleaseVerificationJob`, `CompleteVerificationJob`, `RescheduleVerificationJob`, `maxLogReportSize`, `StoreLogReport`, `GetLogReport` |
+
+Collision check: `postgres_analytics*.go`, `postgres_base_rewards.go`,
+`postgres_dashboard.go`, `postgres_log_report_privacy.go`,
+`postgres_model_registry.go`, `postgres_profiles.go`,
+`postgres_route_telemetry.go`, `postgres_*_migration.go` already exist; none
+of the ten target names above do at `45c44a6d`. `memory.go` (the in-memory
+mirror) is out of scope for this shard.
 
 ## 5. Deferred (explicitly out of this shard)
 
