@@ -13,6 +13,13 @@ Status vocabulary (closed, [`../AGENTS.md`](../AGENTS.md) §3):
 followed by the record's date and one clause of evidence. The Status column
 below repeats the vocabulary word only; the file's line 5 carries the evidence.
 
+## Repository
+
+| Record | Status | Date | One line |
+|---|---|---|---|
+| [repo-cleanup.md](repo-cleanup.md) | In progress | 2026-09-10 | Dependency-ordered cleanup shards, deletion evidence, and documentation hygiene |
+| [megafile-decomposition.md](megafile-decomposition.md) | In progress | 2026-09-10 | Target file map and move-only rules for coordinator megafile decomposition |
+
 ## Routing and scheduling
 
 | Record | Status | Date | One line |
