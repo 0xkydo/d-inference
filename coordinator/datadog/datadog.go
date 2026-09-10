@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/DataDog/datadog-go/v5/statsd"
+	"github.com/eigeninference/d-inference/coordinator/env"
 )
 
 // Client wraps DogStatsD and the Logs API forwarder.
@@ -67,20 +68,13 @@ type Config struct {
 func ConfigFromEnv() Config {
 	return Config{
 		APIKey:       os.Getenv("DD_API_KEY"),
-		Site:         envOr("DD_SITE", "datadoghq.com"),
-		Env:          envOr("DD_ENV", "production"),
-		Service:      envOr("DD_SERVICE", "d-inference-coordinator"),
-		StatsdAddr:   envOr("DD_DOGSTATSD_URL", "localhost:8125"),
+		Site:         env.EnvOr("DD_SITE", "datadoghq.com"),
+		Env:          env.EnvOr("DD_ENV", "production"),
+		Service:      env.EnvOr("DD_SERVICE", "d-inference-coordinator"),
+		StatsdAddr:   env.EnvOr("DD_DOGSTATSD_URL", "localhost:8125"),
 		FlushSecs:    5,
 		MaxBatchSize: 100,
 	}
-}
-
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }
 
 // NewClient initializes the DogStatsD client and log forwarder.
@@ -108,7 +102,7 @@ func NewClient(cfg Config, logger *slog.Logger) (*Client, error) {
 	c.seriesURL = fmt.Sprintf("https://api.%s/api/v1/series", site)
 	c.series = newSeriesBuffer()
 	c.metricsTags = []string{"env:" + cfg.Env, "service:" + cfg.Service}
-	c.metricsHost = envOr("DD_HOSTNAME", cfg.Service)
+	c.metricsHost = env.EnvOr("DD_HOSTNAME", cfg.Service)
 	c.flushIntervalSecs = int64(cfg.FlushSecs)
 
 	// DogStatsD client — best effort. If the agent isn't running, metrics
@@ -363,7 +357,7 @@ func (c *Client) emitDDEvent(entry TelemetryLogEntry) {
 		"text":       entry.Message,
 		"alert_type": "error",
 		"source":     "d-inference",
-		"tags":       []string{"source:" + entry.Source, "kind:" + entry.Kind, "env:" + envOr("DD_ENV", "production")},
+		"tags":       []string{"source:" + entry.Source, "kind:" + entry.Kind, "env:" + env.EnvOr("DD_ENV", "production")},
 	}
 	if entry.Stack != "" {
 		event["text"] = entry.Message + "\n\n```\n" + entry.Stack + "\n```"

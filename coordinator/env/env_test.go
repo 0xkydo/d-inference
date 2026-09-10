@@ -68,8 +68,10 @@ func TestEnvBool(t *testing.T) {
 		{true, "true", false, true},
 		{true, "false", true, false},
 		{true, "1", false, true},
+		{true, " 1 ", false, true},
 		{true, "0", true, false},
 		{true, "  true  ", false, true}, // TrimSpace
+		{true, "yes", true, true},       // unsupported spelling -> fallback
 		{true, "maybe", true, true},     // unparseable -> fallback
 		{true, "", false, false},        // empty -> fallback
 		{false, "", true, true},         // unset -> fallback
