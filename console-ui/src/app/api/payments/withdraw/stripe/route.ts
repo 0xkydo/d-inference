@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { coordinatorUrl, privyAuth } from "@/lib/server/coordinator";
+import { NextRequest } from "next/server";
+import { coordinatorUrl, privyAuth, relayJSON } from "@/lib/server/coordinator";
 
 // Proxy for POST /v1/billing/withdraw/stripe. Forwards the Privy session
 // token via cookie fallback so the Billing page can call it with no API key
@@ -17,9 +17,5 @@ export async function POST(req: NextRequest) {
     },
     body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    const text = await res.text();
-    return NextResponse.json({ error: text }, { status: res.status });
-  }
-  return NextResponse.json(await res.json().catch(() => ({})));
+  return relayJSON(res, { lenientBody: true });
 }

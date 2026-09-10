@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { coordinatorUrl, privyAuth, missingPrivyToken } from "@/lib/server/coordinator";
+import { NextRequest } from "next/server";
+import { coordinatorUrl, missingPrivyToken, privyAuth, relayJSON } from "@/lib/server/coordinator";
 
 // Proxy for GET /v1/provider/account-earnings. Lets the provider-earnings page
 // call same-origin (no cross-origin preflight, coordinator URL resolved
@@ -13,9 +13,5 @@ export async function GET(req: NextRequest) {
     `${coordinatorUrl()}/v1/provider/account-earnings?limit=${encodeURIComponent(limit)}`,
     { headers: { Authorization: authHeader }, cache: "no-store" },
   );
-  if (!res.ok) {
-    const text = await res.text();
-    return NextResponse.json({ error: text || `Upstream ${res.status}` }, { status: res.status });
-  }
-  return NextResponse.json(await res.json());
+  return relayJSON(res, { errorFallback: true });
 }
