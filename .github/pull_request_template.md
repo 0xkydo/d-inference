@@ -30,9 +30,10 @@ For UI changes, include a screenshot or short video.
 <!-- Tick all that apply so reviewers know what to look at. -->
 
 - [ ] coordinator (Go)
-- [ ] provider (Rust, legacy)
 - [ ] provider-swift (Swift CLI)
 - [ ] console-ui (Next.js)
+- [ ] admin-ui (Next.js)
+- [ ] prompt sidecar (Rust)
 - [ ] enclave (Swift)
 - [ ] infra / CI / release
 - [ ] docs
@@ -41,13 +42,30 @@ For UI changes, include a screenshot or short video.
 
 <!--
 If you changed a WebSocket message, an HTTP endpoint, a config key, or a CLI flag:
-- Did you update the matching side? (provider/src/protocol.rs ↔ coordinator/internal/protocol/messages.go)
+- Did you update the matching side? (provider-swift/Sources/ProviderCore/Protocol/ ↔ coordinator/protocol/messages.go)
 - Are release artifacts (`release-swift.yml`, `scripts/install.sh`, `LatestProviderVersion`) still consistent?
 - Does this need a version bump or a migration note?
 -->
 
 - [ ] No protocol/interface changes
 - [ ] Yes — described above and matching side updated
+
+## Before/after Mermaid diagram (required)
+
+<!--
+Show the observable behavior and code-path delta. For docs-only changes,
+diagram the navigation or guidance before and after.
+-->
+
+```mermaid
+flowchart LR
+  subgraph Before
+    A[request or reader] --> B[old behavior / page]
+  end
+  subgraph After
+    C[request or reader] --> D[new behavior / page]
+  end
+```
 
 ## Notes for reviewers
 

@@ -7,6 +7,7 @@ target/
 .next/
 
 # Rust
+# Keep the sidecar lockfile committed for reproducible Rust tests and builds.
 Cargo.lock
 !coordinator/promptsidecar/Cargo.lock
 
@@ -25,7 +26,6 @@ dist/
 # Python
 __pycache__/
 *.egg-info/
-dist/
 build/
 .venv/
 *.pyc
@@ -58,6 +58,7 @@ enclave_key.data
 # Compiled binaries (coordinator)
 coordinator/eigeninference-coordinator
 coordinator/eigeninference-coordinator-linux
+coordinator/coordinator
 
 # LaTeX build artifacts
 *.aux
@@ -86,11 +87,9 @@ docs/default-private-inference-plan.md
 
 # Rust cross-language test build artifacts
 coordinator/internal/e2e/testdata/decrypt/target/
-coordinator/coordinator
-coordinator/eigeninference-coordinator-linux
 docs/RUNBOOK.md
 
-# also match a .build symlink (not just the dir)
+# Also match a .build symlink (not just the dir).
 .build
 
 # Local performance binaries and raw diagnostic captures
