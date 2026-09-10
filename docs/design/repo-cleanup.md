@@ -1,6 +1,6 @@
 # d-inference cleanup — specification and shard plan
 
-> Last updated: 2026-09-10 · commit `7f2c997a2`
+> Last updated: 2026-09-10 · commit `c4e903595`
 
 Status: In progress — 2026-09-10
 
@@ -200,6 +200,18 @@ Decisions:
   target or docs/developer link) vs. archive. Nothing deleted without an
   explicit answer from the user.
 - Dedupe MTP python and shell `fail/require_cmd/cleanup` helpers.
+
+Verdicts:
+- `benchmark-light.py` — REMOVED: no repository references or recorded results; superseded by `scripts/benchmark-models.py` and e2e benchmarks.
+- `mtp-cache-inventory.py` — REMOVED: zero uses since #547; `run-mtp-benchmark.py` does not import it.
+- `run-mtp-benchmark.py` — KEEP: provider benchmark/test references and the live macOS MTP test contract.
+- `cli-preview/**` — KEEP: author-labelled design fixtures added 2026-09-06; production onboarding is live, and revisit deletion is flagged.
+- `gemma_contbatch/**` — KEEP: Makefile, entrypoint, docs, provider/report references, and Linux unit tests for live CBv2.
+- `gptoss_profile/**` — KEEP: direct entrypoint, docs/reports, Linux unit tests, and live GPT-OSS support.
+
+Shell `fail`/`require_cmd`/`cleanup` helper dedupe: not done — 3–5 line helpers
+live in independently curl-able scripts, and sharing them would add a sourcing
+dependency.
 
 **Shard E — provider-swift (grep-verifiable only, R7)**
 - Doc/comment drift vs. coordinator, dead imports, duplicated pure helpers
