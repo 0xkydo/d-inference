@@ -1,6 +1,6 @@
 # Reports — dated records
 
-> Last updated: 2026-09-07 · commit `fdb2edd28`
+> Last updated: 2026-09-10 · commit `4742dc9ae`
 
 Frozen records: incident analyses, measurements, experiment results, and
 migration records. Each file describes the code **as it was on its date**; none
@@ -55,6 +55,12 @@ freshness stamp carries its own date, not the current one.
 | 2026-08-31 | [pr686-resident-prefix-cache-review](2026-08-31-pr686-resident-prefix-cache-review.md) | Review of PR #686 (resident prefix cache) |
 
 Plans and decision memos live in [`../design/`](../design/README.md).
+
+## Migration records
+
+| Date | Report | One line |
+|---|---|---|
+| 2026-07-25 | [paged-kv-migration-journal](2026-07-25-paged-kv-migration-journal.md) | Working log and retracted-deletion evidence from the v0.8.0 paged-KV migration |
 
 ## Trust, fleet, and infrastructure records
 

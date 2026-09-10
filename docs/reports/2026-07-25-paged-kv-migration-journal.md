@@ -1,5 +1,7 @@
 # PagedAttention Migration — Journal
 
+> Last updated: 2026-09-10 · commit `4742dc9ae`
+
 Working log for the contiguous → paged KV migration shipping in **provider
 v0.8.0**. Plan of record: `docs/reports/2026-07-25-paged-kv-migration-plan.md`
 (Rev 2).
@@ -351,7 +353,7 @@ stack:    -
 pr:       none
 did:      Scoped v0.8.0 to full paged rollout; created the integration worktree
           and this journal; confirmed the two version anchors that must move.
-files:    .claude/worktrees/paged-kv/JOURNAL.md
+files:    docs/reports/2026-07-25-paged-kv-migration-journal.md
 evidence: worktree on paged-kv/integration at 2b943b667, submodule at abd1985
           (verified: git submodule status). Version anchors that must go
           0.7.15 -> 0.8.0 in the release commit:

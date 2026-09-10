@@ -1,6 +1,6 @@
 # Design records — what was decided, and whether it shipped
 
-> Last updated: 2026-09-07 · commit `fdb2edd28`
+> Last updated: 2026-09-10 · commit `4742dc9ae`
 
 Plans, proposals, and architecture decision records. Each file is frozen at the
 moment it was written except for its **Status** line, which says whether the
@@ -34,6 +34,7 @@ below repeats the vocabulary word only; the file's line 5 carries the evidence.
 | Record | Status | Date | One line |
 |---|---|---|---|
 | [provider-ui-shared-swift.md](provider-ui-shared-swift.md) | Proposed | 2026-09-07 | Bubble Tea and native macOS structure: shared Swift management, existing persistent provider, lifecycle ownership and replaceable verification |
+| [repo-cleanup.md](repo-cleanup.md) | In progress | 2026-09-10 | Dependency-ordered cleanup shards, deletion evidence, and documentation hygiene |
 
 ## Inference engine and memory
 
