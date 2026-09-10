@@ -1,6 +1,6 @@
 # d-inference cleanup — specification and shard plan
 
-> Last updated: 2026-09-10 · commit `4742dc9ae`
+> Last updated: 2026-09-10 · commit `7f2c997a2`
 
 Status: In progress — 2026-09-10
 
@@ -186,6 +186,13 @@ queued without starting, so local gates remain the merge gate until the
 - Burn down the 76 eslint warnings or justify each rule.
 - Review lens: UI behavior unchanged — vitest + build + manual smoke of chat,
   billing, providers dashboard.
+
+Decisions:
+- Format helpers stay separate: console `lib/format`, leaderboard abbreviations,
+  and admin pg-string-tolerant helpers intentionally differ in inputs, sentinels,
+  and precision (see c-evidence §4).
+- The 76 console ESLint warnings are judgment-class and deferred: `security/detect-object-injection` (29), `sonarjs/no-nested-conditional` (14), `sonarjs/no-duplicate-string` (12), `sonarjs/cognitive-complexity` (10), `sonarjs/no-nested-functions` (4), `sonarjs/no-nested-template-literals` (3), `sonarjs/pseudo-random` (3), `jsx-a11y/role-has-required-aria-props` (1).
+- Network-map barrel re-exports and `DEFAULT_HARDWARE_ID` stay because the implementations/configuration remain live or externally compatible.
 
 **Shard D — scripts/**
 - Owner decision per unreferenced cluster (cli-preview, gemma_contbatch,
