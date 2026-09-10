@@ -207,23 +207,10 @@ export function calculateCapacityRevenue(
   };
 }
 
-export function resolveHardwareRAM(ramOptions: number[], selectedRAM: number): number {
-  return ramOptions.includes(selectedRAM)
-    ? selectedRAM
-    : ramOptions[ramOptions.length - 1] ?? 8;
-}
-
 export function fmtUSD(value: number, decimals = 2): string {
   const absolute = Math.abs(value).toLocaleString(undefined, {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
-  });
-  return value < 0 ? `-$${absolute}` : `$${absolute}`;
-}
-
-export function fmtUSDWhole(value: number): string {
-  const absolute = Math.abs(value).toLocaleString(undefined, {
-    maximumFractionDigits: 0,
   });
   return value < 0 ? `-$${absolute}` : `$${absolute}`;
 }

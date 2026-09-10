@@ -1,6 +1,6 @@
 # Design records — what was decided, and whether it shipped
 
-> Last updated: 2026-09-07 · commit `fdb2edd28`
+> Last updated: 2026-09-10 · commit `548266884`
 
 Plans, proposals, and architecture decision records. Each file is frozen at the
 moment it was written except for its **Status** line, which says whether the
@@ -28,6 +28,12 @@ below repeats the vocabulary word only; the file's line 5 carries the evidence.
 | Record | Status | Date | One line |
 |---|---|---|---|
 | [apns-code-attestation.md](apns-code-attestation.md) | Implemented | 2026-06-14 | Why code identity is proven through an APNs-delivered challenge; as built in [`../architecture/security/attestation.md`](../architecture/security/attestation.md) |
+
+## Repository
+
+| Record | Status | Date | One line |
+|---|---|---|---|
+| [repo-cleanup.md](repo-cleanup.md) | In progress | 2026-09-10 | Dependency-ordered cleanup shards, deletion evidence, and documentation hygiene |
 
 ## Provider interfaces
 
