@@ -29,12 +29,6 @@ below repeats the vocabulary word only; the file's line 5 carries the evidence.
 |---|---|---|---|
 | [apns-code-attestation.md](apns-code-attestation.md) | Implemented | 2026-06-14 | Why code identity is proven through an APNs-delivered challenge; as built in [`../architecture/security/attestation.md`](../architecture/security/attestation.md) |
 
-## Repository
-
-| Record | Status | Date | One line |
-|---|---|---|---|
-| [repo-cleanup.md](repo-cleanup.md) | In progress | 2026-09-10 | Dependency-ordered cleanup shards, deletion evidence, and documentation hygiene |
-
 ## Provider interfaces
 
 | Record | Status | Date | One line |
