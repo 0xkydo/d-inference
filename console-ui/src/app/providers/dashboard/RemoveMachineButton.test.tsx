@@ -15,7 +15,7 @@ vi.mock("@/hooks/useToast", () => ({
     selector({ addToast }),
 }));
 
-const deleteProvider = vi.fn(async () => {});
+const deleteProvider = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock("@/lib/api", () => ({
   deleteProvider,
 }));
