@@ -1,6 +1,6 @@
 # Megafile decomposition — target file map and move-only rules
 
-> Last updated: 2026-09-10 · commit `f6d0b23f1`
+> Last updated: 2026-09-10 · commit `c4d8b7b9c`
 
 Status: In progress — 2026-09-10 (Shard B2 of [repo-cleanup.md](repo-cleanup.md); sub-shards land as separate PRs)
 
@@ -53,7 +53,7 @@ cost and lets later shards own one concern each.
 | Sub-shard | Files | PR |
 |---|---|---|
 | B2a | `api/consumer.go` | #6 |
-| B2b | `api/dispatch.go`, `api/provider.go` | — |
+| B2b | `api/dispatch.go`, `api/provider.go` | #7 |
 | B2c | `api/server.go` | — |
 | B2d | `registry/registry.go`, `registry/scheduler.go` | — |
 | B2e | `store/postgres.go` | — |
@@ -99,9 +99,25 @@ and error sentinels travel with the code that reads them.
 | `provider_attestation.go` | Secure Enclave / MDM / Apple device attestation and trust status | `verifyProviderAttestation` 3003–3221, `mdmVerifyOutcome` + consts, `verifyProviderViaMDM`, `ApplyLateSecurityInfo`, `stageDurableMDAChain`, `attachCachedMDAProof`, `verifyAppleDeviceAttestation`, `sendTrustStatus` |
 | `provider_attestation_status.go` | Redacted trust-status HTTP endpoint and its cache | `providerAttestationCacheTTL`, `providerAttestationCacheKey`, `handleProviderAttestation` |
 
-### 4.4–4.6
+### 4.4 `api/server.go` → 7 files
 
-Maps for `server.go`, `registry.go`, `scheduler.go`, and `postgres.go` are
+| Target | Concern | Anchors (line ranges at `4742dc9a`) |
+|---|---|---|
+| `server.go` | `Server` struct, constructor, lifecycle, dependency setters, routes | `LatestProviderVersion`, `minProviderVersionForDesiredModels`, `latestReleasedVersion`, `approvedReleasePolicy`, `releaseTrustPolicySnapshot`, `Server` 199–541, `NewServer`, `handleRuntimeCapabilitiesPromoted`, `Close`, every `Set*`/getter that only assigns or reads a field (`SetAdminKey` … `SetMDMWebhookSecret` 990–1204, `SetProfileSigner`, `SetBilling`, `Billing`, `SetBaseRewards`, `BaseRewards`, `SetChallengeInterval`, `SetSkipChallenge`, `SetAllowDuplicateProviderSerialsForTesting`, `SetPrivyAuth`, `SetAdminEmails`, `SetMDMClient`, `StartMDMScheduler`, `SetCodeAttestor`, `SetCodeAttestationDeadline`, `SetTTFTHardReject`, `SetRejectModels`, `modelShed`, `SetMinDecodeTPS`, `SetServabilityGate`, `SetDisableClientErrorStop`, `SetLongPromptThreshold`, `SetLongPromptPrefillWeight`, `SetReleaseKey`, `SetCoordinatorKey`), `SyncModelCatalog`, `syncModelAliases`, `invalidateCatalogCache`, `resolveBaseURL`, `installScript`, `installScriptPlaceholder`, `routes` 2732–3015, `Handler`, `handleUnimplementedEndpoint`, `handleAdminMetrics` |
+| `server_context.go` | Request-context keys and accessors | `contextKey`, `ctxKey*` consts, `requestIDFromContext`, `cryptoRand`, `consumerKeyFromContext`, `apiKeyFromContext`, `keyIDFromContext`, `keyLimitMicroFromContext`, `keyLimitResetFromContext`, `newRequestID`, `extractBearerToken` |
+| `server_auth.go` | API-key cache and auth middlewares | `apiKeyCacheEntry`, `apiKeyCacheTTL`, `apiKeyCacheMaxSize`, `lookupAPIKeyCache`, `storeAPIKeyCache`, `invalidateAPIKeyCache`, `invalidateAllAPIKeyCache`, `requireAuth`, `requirePrivyAuth`, `readCacheJanitorInterval`, `StartReadCacheJanitor`, `runReadCacheJanitor` |
+| `server_ratelimit.go` | Rate limiter wiring, token/key limits, 429 writers, limiter middlewares | `SetRateLimiter`, `SetFinancialRateLimiter`, `SetServiceRateLimiter`, `SetTokenLimiters`, `SetOutputAdmissionEstimator`, `SetKeyLimiters`, `applyTokenRateLimit*`, `outputAdmissionTags`, `reconcileOutputAdmission`, `writeTokenRateLimited`, `setTokenRateLimitHeaders`, `applyKeyRPMLimit`, `keyTokenParams`, `setRequestRateLimitHeaders`, `rateLimitConsumer`, `rateLimitFinancial`, `rateLimiterFn`, `financialRateLimiterFn`, `rateLimitWith`, `rateLimitWithTier`, `DefaultRoutingConcurrency`, `SetRoutingConcurrency`, `scanSlotResult` + consts, `acquireRoutingScanSlot`, `releaseRoutingScanSlot` |
+| `server_middleware.go` | Body limits, recover, CORS, logging, status writer | `maxMDMWebhookBodyBytes`, `maxRequestBodyBytes`, `maxControlPlaneBodyBytes`, `HandleMDMWebhook`, `mdmWebhookTokenValid`, `bodyLimitMiddleware`, `decodeCappedJSON`, `recoverMiddleware`, `publicCORSPaths`, `corsMiddleware`, `loggingMiddleware`, `httpPathLabel`, `strconvItoa`, `statusWriter` + methods |
+| `server_telemetry.go` | Emitter/Datadog wiring, emit helpers, gauge loop | `submitTelemetry`, `SetEmitter`, `SetDatadog`, `Datadog`, `Metrics`, `emit`, `emitRequest`, `ddIncr`, `ddCount`, `ddHistogram`, `ddGauge`, `emitPanic`, `registerDefaultGauges`, `StartDDGaugeLoop` |
+| `server_release_policy.go` | Binary-hash policy, release evidence, runtime manifest | `SetBinaryHashEnforcement`, `SetKnownBinaryHashes`, `normalizeKnownBinaryHashes`, `AddKnownBinaryHashes`, `hasConfiguredHashInput`, `SyncBinaryHashes`, `convergeReleasePolicy*`, `releaseEvidenceStillApproved`, `evidence*` consts 1907–1917, `recordReleaseEvidenceOutcome`, `evidenceRejected`, `deriveApprovedReleaseTransition`, `releaseMetallibMatches`, `rebuildBinaryHashPolicyLocked`, `binaryHashPolicySnapshot`, `SyncRuntimeManifest`, `convergeRuntimeManifest*`, `revalidateConnectedProvidersAgainstRuntimePolicy`, `runtimeManifestApprovesMetallib`, `RuntimeManifest` + methods 2364–2448, `templateHashAccepted`, `sortedTemplateHashes`, `semverGreater`, `semverLess`, `SetRuntimeManifest`, `verifyRuntimeHashesForBackend`, `verifyRuntimeHashesAgainstManifest`, `handleRuntimeManifest` |
+
+Note: `HandleMDMWebhook` stays with the body-limit constants it reads only if
+its two callers are the router and tests; if `admin_*.go` siblings already
+own MDM webhook code, place it there instead and record the deviation.
+
+### 4.5–4.6
+
+Maps for `registry.go`, `scheduler.go`, and `postgres.go` are
 added to this record by the PR that opens each sub-shard, using the outline in
 the cleanup inventory and the same assignment rule. A sub-shard PR may not
 start until its map is in this file.
