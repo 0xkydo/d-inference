@@ -125,7 +125,7 @@ func (s *Server) maybeGlobalOnboard(w http.ResponseWriter, r *http.Request, user
 func (s *Server) refreshGlobalRecipient(ctx context.Context, local *store.GlobalRecipient) error {
 	client := s.billing.GlobalPayouts()
 	if client == nil {
-		return errors.New("global payouts is disabled")
+		return errors.New("Global Payouts is disabled")
 	}
 	policy, ok := globalpayouts.Lookup(local.Country)
 	if !ok || policy.Capability == "" {

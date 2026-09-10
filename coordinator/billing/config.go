@@ -82,10 +82,10 @@ func ReadConfig() Config {
 // payment verification.
 func (c Config) Check() error {
 	if c.StripeGlobalPayoutsEnabled && c.StripeSecretKey == "" {
-		return fmt.Errorf("global payouts supplements Connect and requires %s_STRIPE_SECRET_KEY; its dedicated key only overrides Global Payouts API authentication", env.EnvPrefix)
+		return fmt.Errorf("Global Payouts supplements Connect and requires %s_STRIPE_SECRET_KEY; its dedicated key only overrides Global Payouts API authentication", env.EnvPrefix)
 	}
 	if c.StripeGlobalPayoutsEnabled && (c.StripeGlobalPayoutsFinancialAccount == "" || c.StripeGlobalPayoutsSecretKey == "") {
-		return fmt.Errorf("global payouts requires a financial account and restricted API key")
+		return fmt.Errorf("Global Payouts requires a financial account and restricted API key")
 	}
 	if c.MockMode && (c.StripeSecretKey != "" || c.StripeGlobalPayoutsSecretKey != "") {
 		return fmt.Errorf("billing mock mode is enabled but a real Stripe secret key is configured — these are mutually exclusive; unset %s_STRIPE_SECRET_KEY or disable %s_BILLING_MOCK", env.EnvPrefix, env.EnvPrefix)

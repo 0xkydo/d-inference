@@ -44,7 +44,7 @@ func (s *Server) handleGlobalPayoutQuote(w http.ResponseWriter, r *http.Request)
 	}
 	repo, ok := s.globalPayoutStore()
 	if !ok || !s.billing.GlobalPayoutsEnabled() {
-		globalPayoutError(w, errors.New("global payouts unavailable"))
+		globalPayoutError(w, errors.New("Global Payouts unavailable"))
 		return
 	}
 	var req struct {
@@ -167,7 +167,7 @@ func (s *Server) maybeGlobalWithdraw(w http.ResponseWriter, r *http.Request, use
 		return true
 	}
 	if s.billing.GlobalPayouts() == nil {
-		globalPayoutError(w, errors.New("global payouts unavailable"))
+		globalPayoutError(w, errors.New("Global Payouts unavailable"))
 		return true
 	}
 	if decodeErr != nil {
