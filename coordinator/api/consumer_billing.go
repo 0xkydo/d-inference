@@ -4,12 +4,32 @@ package api
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/eigeninference/d-inference/coordinator/payments"
 	"github.com/eigeninference/d-inference/coordinator/registry"
 	"github.com/eigeninference/d-inference/coordinator/store"
 )
+
+// refundProviderExtra refunds the provider-specific surcharge charged on top of
+// the shared base reservation when an attempt is abandoned. It is idempotent:
+// after refunding it resets ReservedMicroUSD to the base so a second call (or a
+// later settlement) cannot double-refund. The shared base is never refunded
+// here — that is handled once by refundReservation (full failure) or by the
+// winning attempt's settlement.
+func (s *Server) refundProviderExtra(pr *registry.PendingRequest) {
+	if pr == nil {
+		return
+	}
+	extra := pr.ReservedMicroUSD - pr.BaseReservedMicroUSD
+	if extra <= 0 {
+		return
+	}
+	_ = s.store.Credit(pr.ConsumerKey, extra, store.LedgerRefund, "reservation_extra_refund:"+pr.RequestID)
+	pr.ReservedMicroUSD = pr.BaseReservedMicroUSD
+	s.ddIncr("billing.reservation_extra_refunds", []string{"model:" + pr.Model})
+}
 
 // reservationCost is the pre-flight worst-case cost for a text inference
 // request. It mirrors the platform-price branch of handleComplete's billing
@@ -137,3 +157,9 @@ func (s *Server) reserveAdditionalForProvider(pr *registry.PendingRequest, provi
 	s.ddHistogram("billing.reserved_micro_usd", float64(required), []string{"model:" + pr.Model})
 	return required, nil
 }
+
+// usdToMicro converts a USD dollar amount to micro-USD (rounded).
+func usdToMicro(usd float64) int64 { return int64(math.Round(usd * 1_000_000)) }
+
+// microToUSD converts micro-USD to a USD float.
+func microToUSD(micro int64) float64 { return float64(micro) / 1_000_000 }

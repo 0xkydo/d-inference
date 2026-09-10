@@ -5,7 +5,6 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -29,12 +28,6 @@ type createAPIKeyRequest struct {
 	SelfRouteOnly bool       `json:"self_route_only"`
 	ExpiresAt     *time.Time `json:"expires_at"`
 }
-
-// usdToMicro converts a USD dollar amount to micro-USD (rounded).
-func usdToMicro(usd float64) int64 { return int64(math.Round(usd * 1_000_000)) }
-
-// microToUSD converts micro-USD to a USD float.
-func microToUSD(micro int64) float64 { return float64(micro) / 1_000_000 }
 
 // handleHealth handles GET /health.
 // Returns the coordinator's status and the number of connected providers.
