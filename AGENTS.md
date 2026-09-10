@@ -2,6 +2,12 @@
 
 Darkbloom is a decentralized private inference network for Apple Silicon Macs. Consumers use OpenAI-compatible APIs, the coordinator handles routing, auth, billing, attestation, and capacity management, and providers run local inference workloads on macOS hardware using MLX-Swift. Request bodies are encrypted hop by hop (NaCl Box on each leg): the coordinator decrypts inside its confidential-VM memory for routing and billing, does not log or retain prompt content, and re-seals each request to the provider's attested key; the provider is the plaintext endpoint. Exact model: `docs/architecture/security/encryption.md`. Docs map: `docs/README.md`; docs rules: `docs/AGENTS.md`.
 
+### External dependencies (`.external/`)
+
+The `.external/` directory is reserved for local external checkouts and must
+never be committed. The Swift provider uses in-process MLX, not a vllm-mlx
+subprocess.
+
 ## Provider Onboarding Development
 
 - Read `docs/developer/onboarding-test.md`. Scope: Install → enrollment → account linkage → model selection/download → final Enter-to-start prompt. Require an explicit action before opening enrollment or the login browser; use neutral styling and selective bold, green success and red errors, without blue/cyan accents.
@@ -49,7 +55,7 @@ coordinator/          Go control plane (packages live at top level, not internal
 └── internal/e2e/     X25519 request-encryption helpers (+ cross-compat/tamper tests)
 
 e2e/                  System-level E2E testing framework
-├── integration_test.go  14 E2E tests (streaming, billing, encryption, attestation, etc.)
+├── integration_test.go  integration coverage for streaming, billing, encryption, and attestation
 ├── profile_test.go      latency profiling tests
 ├── benchmark_test.go    load benchmarks (posts markdown to PR comments)
 └── testbed/             shared test harness
@@ -86,7 +92,8 @@ console-ui/           Next.js 16 / React 19 frontend
 └── src/proxy.ts      Next.js 16 proxy (replaces middleware.ts)
 
 admin-ui/             Next.js 16 internal read-only ops dashboard (SELECT-only queries against the
-                      prod read replica; Basic Auth via src/proxy.ts; has vitest tests, not in CI)
+                      prod read replica; Basic Auth via src/proxy.ts; has vitest tests covered by the
+                      `test-admin` CI job)
 
 landing/              static landing page (index.html, earn calculator, network stats)
 
@@ -155,6 +162,15 @@ make ui-test                  # vitest (npm test)
 make ui                       # install + lint + test + build
 ```
 
+### Admin UI (Next.js 16)
+```bash
+cd admin-ui
+npm ci
+npx eslint src/
+npx tsc --noEmit
+npm test -- --run
+```
+
 ### E2E Integration Tests
 ```bash
 # Requires Postgres + Swift provider binary + MLX model downloaded.
@@ -169,6 +185,25 @@ make build                    # build all components
 make all                      # test + build everything
 make clean                    # remove built artifacts
 ```
+
+## Releases
+
+**Never create a release unless explicitly asked by the user.** When asked:
+
+1. Squash local commits since the last tag into one commit on `master`.
+2. Bump the Swift provider version in
+   `provider-swift/Sources/ProviderCore/ProviderCore.swift`.
+3. Create an annotated tag:
+   ```bash
+   git tag -a v0.X.Y -m "v0.X.Y: one-line summary
+
+   - Change 1
+   - Change 2"
+   ```
+4. Push the commit and tag with `git push origin master --tags`.
+5. `.github/workflows/release-swift.yml` handles tags shaped `vX.Y.Z` and
+   legacy `vX.Y.Z-swift[.N]`; dev publication uses `workflow_dispatch`.
+   Requested versions must equal the checked-in source constants.
 
 ## Deploying
 
@@ -202,6 +237,51 @@ curl https://api.darkbloom.dev/health
 
 Dev coordinator deploy (Google Cloud): see `docs/operations/dev-environment.md`.
 
+## Infrastructure
+
+| Component | Production | Development |
+|-----------|------------|-------------|
+| Coordinator host | GCE VM `darkbloom-coordinator` in `darkbloom-mainnet`, `us-east4-a` | GCE VM `d-inference-dev` in `sepolia-ai`, `us-central1-a` |
+| Console UI | Vercel | Vercel, `NEXT_PUBLIC_COORDINATOR_URL=https://api.dev.darkbloom.xyz` |
+| Domain | `api.darkbloom.dev` | `api.dev.darkbloom.xyz` |
+| TLS | Host Caddy with a static certificate | Host Caddy with Let's Encrypt ACME |
+| Database | AWS RDS PostgreSQL | Cloud SQL Postgres 16 via cloud-sql-proxy |
+| Persistent storage | `/mnt/disks/userdata` | `d-inference-dev-data` mounted at `/mnt/disks/userdata` |
+| Release bucket | R2 `d-inf-app` | R2 `d-inf-app-dev` |
+| Trust level | `hardware` | `hardware` |
+| Provider install | `https://api.darkbloom.dev/install.sh` | `https://api.dev.darkbloom.xyz/install.sh` |
+
+## Key Design Decisions
+
+- **Token-budget routing:** Providers report active tokens, maximum potential
+  tokens, and EWMA decode TPS. Admission uses that capacity, with fleet-median
+  TPS fallback. Speculative TTFT dispatch sends to a backup at half the
+  deadline; the first token wins.
+- **Provider selection:** Candidates are ranked by estimated completion cost,
+  queue depth, pending requests, slot state, and live heartbeat metrics. Near
+  ties are spread randomly (`coordinator/registry/scheduler.go`).
+- **Continuous batching:** Concurrent requests share a batched MLX-Swift
+  forward pass; temperature zero uses the vectorized greedy path.
+- **Request cancellation:** In-flight requests are tracked by `request_id` and
+  cancelled when the coordinator disconnects.
+- **Idle GPU unload:** Loaded model state is released after one hour without
+  requests and lazy-reloaded on demand.
+- **Hop-by-hop encryption:** The coordinator decrypts consumer bodies in
+  confidential-VM memory for routing and billing and does not retain them; see
+  `docs/architecture/security/encryption.md`.
+- **Attestation:** Secure Enclave, MDM, and Apple Enterprise Attestation form
+  the trust chain; `/v1/providers/attestation` exposes only redacted status.
+- **Model registry:** Registry records point to R2 manifests; providers verify
+  per-file and aggregate SHA-256 values. Do not reintroduce hardcoded catalogs.
+- **Billing:** Stripe deposits fund the micro-USD ledger; Stripe Connect handles
+  payouts. The BIP39 mnemonic derives the coordinator's X25519 key.
+- **Coordinator request queue:** When providers are busy, requests queue for
+  120 seconds before timing out. A separate provider idle-unload policy is one
+  hour.
+- **Pre-content failover:** Providers are not committed until content-bearing
+  output; pre-content failures retry invisibly and repeated 5xx pairs enter a
+  five-minute cooldown.
+
 ## Important Sync Points
 
 - Protocol changes must be mirrored in both `provider-swift/Sources/ProviderCore/Protocol/` and `coordinator/protocol/messages.go`.
@@ -223,11 +303,11 @@ Dev coordinator deploy (Google Cloud): see `docs/operations/dev-environment.md`.
 - `coordinator/coordinator` may exist locally as a build artifact (it is gitignored, not tracked). Do not model changes from it, and never commit binaries or other built artifacts.
 - CI release workflow must compute binary SHA-256 hashes AFTER code signing, not before. Providers verify hashes of the signed binary.
 - Model scan uses fast discovery (no hashing) at startup (`ModelScanner`). Weight hashing is on-demand via `WeightHasher.computeHash(for:)` only for models that need attestation/verification. Don't add hashing back to the scan path.
-- Models with broken chat templates are not auto-repaired. The provider runs a scan-time chat-template render self-check (`TemplateRenderCheck`) and reports `template_render_ok=false`; the coordinator then fences **all** requests (plain text, tools, multimodal alike) away from that (provider, model) pair — a crashing template breaks every request shape (`providerEligibleForTraitsLocked`, `registry/request_traits.go`). Only the capability *version floors* are tool-scoped.
+- Models with broken chat templates are not auto-repaired. The provider runs a scan-time chat-template render self-check (`TemplateRenderCheck`) and reports `template_render_ok=false`; the coordinator then fences **all** requests (plain text, tools, multimodal alike) away from that (provider, model) pair — a crashing template breaks every request shape (`providerEligibleForTraitsLocked`, `coordinator/registry/request_traits.go`). Only the capability *version floors* are tool-scoped.
 - The vision tower is driven **one image at a time** (`EngineV2VisionTowerRun.qwenPerImageVisionFeatures`). Qwen3-VL's tower attends over whatever it is handed as one sequence with an N×N intermediate, so batching a request's images made peak device memory quadratic in the image count and asked Metal for buffers many times `MTLDevice.maxBufferLength`. Do not "optimize" the loop back into a single call. `VisionTowerBudget` predicts that peak from the processor's grids and the model's own vision config — the N² multiple is 1 when MLX can fuse the head dim (64/80/128, `sdpa_full_supported_head_dim`) and `numHeads` when it falls back and materializes `[1, H, N, N]` scores — and the whole prefill runs under `MLX.withError` because MLX's default handler is `fatalError`. That handler **records and returns**, so every `eval` site must check the box (`throwIfMLXFaulted`); checking only on block exit lets the code run on after a refused allocation and lets a later Swift throw hide the cause.
-- Store selection (`cmd/coordinator/main.go`): the coordinator uses the **Postgres** store whenever `EIGENINFERENCE_DATABASE_URL` is set (prod does — durable across restarts/deploys), and refuses to start without it unless `EIGENINFERENCE_ALLOW_MEMORY_STORE=true`. The in-memory store is the dev/test fallback only (state lost on restart). Note: the live provider *registry* (WebSocket connections/attestation) is always in-process and is rebuilt on reconnect regardless of store.
-- Request queue timeout is 120 seconds. Initial attestation challenge is sent immediately on registration, then every 5 minutes.
-- Backend idle timeout is 1 hour (not 10 minutes as some comments may say).
+- Store selection (`coordinator/cmd/coordinator/main.go`): the coordinator uses the **Postgres** store whenever `EIGENINFERENCE_DATABASE_URL` is set (prod does — durable across restarts/deploys), and refuses to start without it unless `EIGENINFERENCE_ALLOW_MEMORY_STORE=true`. The in-memory store is the dev/test fallback only (state lost on restart). Note: the live provider *registry* (WebSocket connections/attestation) is always in-process and is rebuilt on reconnect regardless of store.
+- Coordinator request-queue timeout is 120 seconds. Initial attestation challenge is sent immediately on registration, then every 5 minutes.
+- Provider backend idle unload is 1 hour, not 10 minutes.
 - `handleChunk` never silently drops streamed chunks: when a consumer's chunk buffer is full it gets one 250ms grace window (`chunkOverflowGrace`), then the request is failed with 499 and the provider's generation is cancelled.
 - `hypervisor_active` is retired (#492): current providers no longer send it, but `AttestationResponseMessage.HypervisorActive` and the canonical-status support must keep decoding so signed payloads from older (< v0.6.31) providers still verify. Remove only once the fleet version floor passes v0.6.31.
 
@@ -238,7 +318,7 @@ Provider state lives in several fields that are read by different code paths wit
 - `BackendCapacity.Slots` is **authoritative** for the scheduler when present (Swift providers). The scheduler derives `slotState`, `modelLoaded`, token budgets, and observed TPS from it. `WarmModels` is only a fallback for legacy providers without `BackendCapacity`.
 - `WarmModels` is updated by heartbeats. It is NOT consulted by `snapshotProviderLocked` or `buildCandidateWithReason` when `BackendCapacity` is non-nil. `TriggerModelSwaps` / `hasWarmProviderLocked` checks it as a fallback, and `/v1/me/providers` copies it into API responses.
 - `CurrentModel` is set from heartbeat `active_model`. A nil/omitted `active_model` means no model is loaded. Stale `CurrentModel` can cause attestation hash mismatches.
-- `pendingModelLoads` is checked by `TriggerModelSwaps` planning, cold-spill eligibility (`registry/cold_dispatch.go`), and the warm-pool controller's target math. It is NOT checked by `QuickCapacityCheck`, `ReserveProviderEx`, or `freeMemoryAdmits` — do not assume pending-load state affects routing admission.
+- `pendingModelLoads` is checked by `TriggerModelSwaps` planning, cold-spill eligibility (`coordinator/registry/cold_dispatch.go`), and the warm-pool controller's target math. It is NOT checked by `QuickCapacityCheck`, `ReserveProviderEx`, or `freeMemoryAdmits` — do not assume pending-load state affects routing admission.
 - Provider-reported slot states include `"running"` (active requests), `"idle"` (loaded, no requests), `"crashed"`, `"reloading"`, and `"idle_shutdown"`. The `"idle"` state means the model IS loaded — treat it the same as `"running"` for warm detection, not as `"unknown"`.
 - Providers can hold up to `maxModelSlots` models simultaneously (default 3). Do not assume a model swap evicts all other models.
 - The provider's memory model is `UnifiedMemoryCap` (`provider-swift/Sources/ProviderCore/Inference/UnifiedMemoryCap.swift`): hard cap = 0.90 × physical RAM (always leaving ≥ 2 GiB for the OS; `DARKBLOOM_MEM_CAP_FRACTION` override). The model-load gate requires resident weights + incoming weights + headroom (the resolved activation reserve plus 1 GiB minimum KV) ≤ the cap, and a post-load guard unloads a freshly-loaded model whose measured live KV headroom is below the minimum serveable KV. The weights figure at EVERY admit-time gate (load gate, pending-load reservation, startup preload, doctor, and the coordinator's `reportedFreeForLoadAdmits`) is the scanner's padded estimate (disk × 1.2) for every model — the padding covers the LOAD TRANSIENT (shard staging exceeds steady residency). Measured post-load residency lives only in the coordinator's `servabilityMeasuredResidentGiB` (text-only artifacts; canonical values re-measured per engine release, see docs/reports/2026-08-30-activation-floor-measurements.md) and feeds only `coldTokenBudgetEstimate` — the POST-load token-budget arithmetic that converges to warm reports. The `DARKBLOOM_ACTIVATION_RESERVE_GB` env override is **raise-only against the resolved floor**; only programmatic `activationReserveBytes` values (tests) are honored as given.
@@ -253,14 +333,71 @@ When adding code that mutates provider state or sends commands (`load_model`, et
 3. Check concurrent access — heartbeats arrive per-provider on separate goroutines; `TriggerModelSwaps` can race with `drainQueuedRequestsForModels`.
 4. Check the cleanup path — `Disconnect()` must clear any per-provider state you add.
 5. Verify pre-existing invariants: `maxModelSlots`, heartbeat field omission semantics (`nil` vs empty), and the `UnifiedMemoryCap` load gate on the provider side.
-6. **Store read-through cache** (`store/cached.go`): `CachedStore` serves `GetUserByAccountID`/`GetUserByPrivyID` and `GetModelRegistryRecord`/`GetModelManifest` from memory and invalidates on the store mutators it overrides. Any NEW `store.Store` method that writes the `users` table or the model-registry tables must be overridden in `CachedStore` to invalidate its domain, or callers read stale data for up to the TTL. Backend-only capabilities discovered by type assertion must go through `store.As` (the decorator implements `Unwrap`).
+6. **Store read-through cache** (`coordinator/store/cached.go`): `CachedStore` serves `GetUserByAccountID`/`GetUserByPrivyID` and `GetModelRegistryRecord`/`GetModelManifest` from memory and invalidates on the store mutators it overrides. Any NEW `store.Store` method that writes the `users` table or the model-registry tables must be overridden in `CachedStore` to invalidate its domain, or callers read stale data for up to the TTL. Backend-only capabilities discovered by type assertion must go through `store.As` (the decorator implements `Unwrap`).
+
+## Deletion gate (mandatory before removing any symbol/file)
+
+Before deleting anything, record evidence for every search below and confirm the
+premise in both production code and tests:
+
+1. Search the symbol name, including `provider-swift/Tests/`, `*_test.go`, fixtures, and
+   benchmarks.
+2. Search accessors, methods, inferred-type uses, protocol/interface
+   requirements, Codable fields, JSON tags, route strings, reflection strings,
+   and environment-variable names.
+3. Search config defaults and shipped manifests under `deploy/`.
+4. Search scripts, docs, workflows, and `Makefile`.
+
+The compiler, `knip`, and `deadcode` identify leads, not proof. Three failures
+from the paged-KV migration define the gate: a struct default describes only an
+absent JSON key, not a shipped checkpoint; production-dead code can still be a
+load-bearing test fixture; and an inferred return type can have live consumers
+without naming the type. Grep provider test directories separately from
+production sources.
+
+Protocol compatibility, test coverage, and wire-contract decoding take priority
+over apparent reachability. The `DARKBLOOM_CBV2_PAGED_KV=0` rollback path remains
+supported until the paged backend is stable. Protocol changes still land in both
+`provider-swift/Sources/ProviderCore/Protocol/` and `coordinator/protocol/`.
+
+The migration journal's historical wave-ordering rules and shared-worktree
+operating rules were not carried forward: their referenced wave files and local
+worktree paths are no longer present or are not general repository guidance.
+
+## Problem-Solving Approach
+
+When fixing a bug or designing a feature:
+
+1. Identify the root cause rather than patching the symptom.
+2. Enumerate the full state space before implementing.
+3. Work top-down from the user-visible guarantee and bottom-up from the code.
+4. Simulate the full lifecycle locally before shipping.
+5. Ask what breaks next after every fix.
+6. Trace every component and boundary using source, logs, and real responses;
+   do not rank an unverified theory as the cause.
+
+## Testing New Features
+
+Every new feature or non-trivial change ships with tests. Prefer isolated real
+dependencies over mocks, never point tests at production, cover both memory
+and Postgres implementations when a feature spans both, exercise new HTTP
+routes through `httptest.NewServer`, and add a regression test for every bug
+fix. Frontend features need Vitest coverage; UI flows that cannot be unit
+tested need a browser check recorded in the handoff.
+
+## Quality Gate
+
+After each objective, review the diff for modularity and run an adversarial
+review against the changed behavior, regression risks, protocol symmetry,
+affected build/tests, and required documentation stamps. Do not move to the
+next objective until the review finds no blocking issue.
 
 ## Code Structure & Modularity
 
 Keep the codebase modular, never monolithic.
 
 - Prefer small, single-responsibility files over large catch-all ones. Split by concern: types, pure helpers, data/IO hooks, UI pieces, and a thin orchestrator that wires them together.
-- Group a feature's files into a dedicated module/folder with a thin entry point. Examples: the coordinator's top-level Go packages (`registry/`, `billing/`, `store/`), and `console-ui/src/components/api-keys/` (`constants`, `format`, `limits`, `Modal`, `KeyForm`, `KeyCard`, a `useApiKeys` data hook, and a thin `ApiKeysManager` orchestrator).
+- Group a feature's files into a dedicated module/folder with a thin entry point. Examples: the coordinator's top-level Go packages (`coordinator/registry/`, `coordinator/billing/`, `coordinator/store/`), and `console-ui/src/components/api-keys/` (`constants`, `format`, `limits`, `Modal`, `KeyForm`, `KeyCard`, a `useApiKeys` data hook, and a thin `ApiKeysManager` orchestrator).
 - One file/component should do one thing. If a file mixes several concerns or grows past a few hundred lines, that's a signal to split it.
 - **At the end of every large piece of work, do a refactor pass to make it modular before calling it done.** Extract helpers/types/hooks into focused files, delete dead code, and keep the public entry point thin. The refactor must be behavior-preserving — build, lint, and tests stay green.
 
@@ -285,16 +422,20 @@ flowchart LR
 ```
 ````
 
-## Formatting
+## Git Hooks
 
-A pre-commit hook in `.githooks/pre-commit` checks staged files only. It is enabled via:
-
-```bash
-git config core.hooksPath .githooks
-```
+Hooks live in `.githooks/`. The pre-commit hook checks staged files; the
+pre-push hook runs formatting, compilation, and tests for changed components.
+Run `.githooks/pre-commit` manually before each commit.
 
 | Component | Check | Manual fix |
 |-----------|-------|------------|
 | Go (`coordinator/`) | `gofmt -l` | `gofmt -w <file>` |
-| Swift (`provider-swift/`) | no enforced formatter | `cd provider-swift && swift test` |
+| Swift (`provider-swift/`) | skipped on Linux | `cd provider-swift && swift test` |
 | TypeScript (`console-ui/`) | `npx eslint src/` | `cd console-ui && npx eslint src/ --fix` |
+
+## Formatting
+
+Formatting checks and manual fixes are listed in **Git Hooks** above. The
+repository hook path is `.githooks/`; do not change Git configuration as part
+of a code or documentation change.
