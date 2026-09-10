@@ -1,6 +1,6 @@
 # d-inference cleanup — specification and shard plan
 
-> Last updated: 2026-09-10 · commit `c4e903595`
+> Last updated: 2026-09-10 · commit `f70912f99`
 
 Status: In progress — 2026-09-10
 
@@ -218,12 +218,36 @@ dependency.
   visible by reading. No logic, MLX, cache, or attestation edits. Everything
   labelled "needs macOS CI".
 
+Findings (grep-verified on Linux, 2026-09-10):
+- Protocol mirror: all 15 provider→coordinator and 9 coordinator→provider
+  `type` strings and current JSON keys match
+  (`coordinator/protocol/messages.go` ↔ `Messages.swift`); only asymmetry is
+  Go's retained legacy `hypervisor_active` key, documented as retired-compat.
+- Telemetry: sources, severities, kinds, and event fields align across
+  Go/Swift/TS. Allowlist keys `url`, `user_agent`, and `route` exist in Go+TS
+  but not Swift — browser-origin fields, not drift; no change.
+- Dead code: every grep candidate (`ProviderLoop+Testing.swift` hooks, etc.)
+  has live test call sites; nothing is removable.
+- Duplicated helpers: byte/duration formatters are scoped duplicates with
+  drifted semantics; not merged without a toolchain.
+- Stale Swift paths (`KVCache/PrefixCacheManager.swift`,
+  `PrefixDigest.swift`, `Inference/BatchScheduler.swift`) appear only in
+  frozen `design/`/`reports/` bodies — left as-is per `docs/AGENTS.md` §3/§8.
+- Deferred to a macOS session: unused `os`/`CryptoKit` imports
+  (compiler-confirmed only), and move-only splitting of
+  `SSDPrefixCacheTests.swift`/`EngineV2BridgeTests.swift` by Swift Testing
+  suite groups.
+
 **Shard F — process guards (Bun principle 5)**
 - docs-check extension: a `counts` stamp check or removal of hard-coded
   counts from guidance; CI job that fails if a `*_test.go` package has zero
   executed tests on Linux (guard against build-tag hiding); golangci-lint
   config gains `staticcheck` with the websocket deprecation excluded
   explicitly (so the one real SA4006-class hit can't hide again).
+
+Status: deferred until fork CI runners schedule jobs — CI-side guards
+(zero-executed-test check, staticcheck in golangci config, movecheck in
+Coordinator Lint) cannot be verified locally and would land unexercised.
 
 ## 6. Execution model
 
