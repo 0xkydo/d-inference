@@ -57,16 +57,19 @@ export function DatadogRUM() {
 
   // Track user identity when authenticated.
   useEffect(() => {
-    if (!authenticated || !user) return;
+    const currentUser = user;
+    if (!authenticated || !currentUser) return;
 
     const applicationId = process.env.NEXT_PUBLIC_DD_APPLICATION_ID;
     if (!applicationId) return;
+    const userId = currentUser.id;
+    const email = currentUser.email?.address || "";
 
     async function setUser() {
       const { datadogRum } = await import("@datadog/browser-rum");
       datadogRum.setUser({
-        id: user?.userId || user?.id || "",
-        email: user?.email?.address || "",
+        id: userId,
+        email,
       });
     }
 

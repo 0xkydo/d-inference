@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render } from "@testing-library/react";
 import type { AuthState } from "./PrivyClientProvider";
+import type { User } from "@privy-io/react-auth";
 
 // Mutable holder for the value usePrivy() returns, so a test can simulate a
 // Privy "tick" by swapping in a brand-new object with new function identities.
@@ -18,7 +19,7 @@ function privyValue(over: Record<string, unknown> = {}): Record<string, unknown>
   return {
     ready: true,
     authenticated: true,
-    user: { id: "u1" },
+    user: { id: "u1" } as User,
     login: vi.fn(),
     logout: vi.fn(async () => {}),
     getAccessToken: vi.fn(async () => "tok"),

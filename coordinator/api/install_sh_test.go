@@ -140,7 +140,10 @@ func TestInstallScriptTemplating(t *testing.T) {
 				t.Errorf("install.sh exposes hardware identity through %q", forbidden)
 			}
 		}
-		if !strings.Contains(body, `start --onboarding`) {
+		if !strings.Contains(body, `frontend=(--onboarding)`) {
+			t.Error("install.sh must prepare the CLI onboarding flags")
+		}
+		if !strings.Contains(body, `start "${frontend[@]}"`) {
 			t.Error("install.sh must delegate enrollment to the CLI onboarding flow")
 		}
 		if strings.Contains(body, `/v1/enroll`) {

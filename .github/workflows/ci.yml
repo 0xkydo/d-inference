@@ -371,5 +371,28 @@ jobs:
         run: cd console-ui && npm ci
       - name: Lint
         run: cd console-ui && npx eslint src/
+      - name: TypeScript
+        run: cd console-ui && npx tsc --noEmit
+      - name: Tests
+        run: cd console-ui && npm test -- --run
       - name: Build
         run: cd console-ui && npm run build
+
+  test-admin:
+    name: Admin UI Tests
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: admin-ui/package-lock.json
+      - name: Install dependencies
+        run: cd admin-ui && npm ci
+      - name: Lint
+        run: cd admin-ui && npx eslint src/
+      - name: TypeScript
+        run: cd admin-ui && npx tsc --noEmit
+      - name: Tests
+        run: cd admin-ui && npm test -- --run
