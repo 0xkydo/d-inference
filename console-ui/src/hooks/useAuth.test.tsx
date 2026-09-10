@@ -4,6 +4,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import type { AuthState } from "@/components/providers/PrivyClientProvider";
 import { useAuth, resetConsoleKeyProvisionBackoff } from "./useAuth";
 import { STORAGE_KEYS } from "@/lib/constants";
+import type { User } from "@privy-io/react-auth";
 
 // Mutable holder so each test can drive what useAuthContext returns.
 const h = vi.hoisted(() => ({ auth: null as unknown as AuthState }));
@@ -17,7 +18,7 @@ function authState(over: Partial<AuthState> = {}): AuthState {
   return {
     ready: true,
     authenticated: true,
-    user: { id: "u1" },
+    user: { id: "u1" } as User,
     login: vi.fn(),
     logout: vi.fn(async () => {}),
     getAccessToken: vi.fn(async () => "privy-token"),

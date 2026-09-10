@@ -17,7 +17,7 @@ vi.mock("@/hooks/useToast", () => ({
 
 const deleteProvider = vi.fn(async () => {});
 vi.mock("@/lib/api", () => ({
-  deleteProvider: (...args: unknown[]) => deleteProvider(...args),
+  deleteProvider,
 }));
 
 const REMOVE_BTN = { name: "Remove machine" } as const;

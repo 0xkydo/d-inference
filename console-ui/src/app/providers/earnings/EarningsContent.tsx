@@ -56,12 +56,15 @@ export default function EarningsContent() {
 
   const getAuthHeaders = useCallback(async () => {
     const accessToken = await getAccessToken().catch(() => null);
+    const headers: Record<string, string> = {};
     if (accessToken) {
-      return { Authorization: `Bearer ${accessToken}` };
+      headers.Authorization = `Bearer ${accessToken}`;
+      return headers;
     }
 
     const apiKey = localStorage.getItem(STORAGE_KEYS.apiKey) || "";
-    return apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+    return headers;
   }, [getAccessToken]);
 
   const fetchEarnings = useCallback(async () => {

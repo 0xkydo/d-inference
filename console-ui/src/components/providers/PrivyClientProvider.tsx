@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState } from "react";
 import dynamic from "next/dynamic";
+import type { User } from "@privy-io/react-auth";
 
 const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID || "";
 const IS_PRIVY_CONFIGURED = PRIVY_APP_ID && PRIVY_APP_ID !== "placeholder";
@@ -9,7 +10,7 @@ const IS_PRIVY_CONFIGURED = PRIVY_APP_ID && PRIVY_APP_ID !== "placeholder";
 export interface AuthState {
   ready: boolean;
   authenticated: boolean;
-  user: unknown;
+  user: User | null;
   login: () => void;
   logout: () => Promise<void>;
   getAccessToken: () => Promise<string | null>;

@@ -1,7 +1,7 @@
 // Shared test fixtures for the provider dashboard. Builds a fully-populated
 // MyProvider so individual tests only override the few fields they exercise.
 
-import type { MyProvider, MyReputation } from "../types";
+import type { MyHardware, MyProvider, MyReputation } from "../types";
 
 export function makeReputation(overrides: Partial<MyReputation> = {}): MyReputation {
   return {
@@ -17,7 +17,12 @@ export function makeReputation(overrides: Partial<MyReputation> = {}): MyReputat
   };
 }
 
-export function makeProvider(overrides: Partial<MyProvider> = {}): MyProvider {
+export function makeProvider(
+  overrides: Omit<Partial<MyProvider>, "hardware" | "reputation"> & {
+    hardware?: Partial<MyHardware>;
+    reputation?: Partial<MyReputation>;
+  } = {},
+): MyProvider {
   const { reputation, hardware, ...rest } = overrides;
   return {
     id: "p1",
