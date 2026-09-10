@@ -40,6 +40,24 @@ export async function passthrough(res: Response): Promise<NextResponse> {
   });
 }
 
+/**
+ * Relay an upstream JSON response. Non-OK responses become `{ error }` with the
+ * upstream status; `errorFallback` substitutes `Upstream <status>` for an empty
+ * error body and `lenientBody` tolerates a non-JSON OK body (→ `{}`).
+ */
+export async function relayJSON(
+  res: Response,
+  opts: { errorFallback?: boolean; lenientBody?: boolean } = {},
+): Promise<NextResponse> {
+  if (!res.ok) {
+    const text = await res.text();
+    const error = opts.errorFallback ? text || `Upstream ${res.status}` : text;
+    return NextResponse.json({ error }, { status: res.status });
+  }
+  const body = opts.lenientBody ? await res.json().catch(() => ({})) : await res.json();
+  return NextResponse.json(body);
+}
+
 /** Standard "missing privy token" 401 used by Privy-only routes. */
 export function missingPrivyToken(): NextResponse {
   return NextResponse.json({ error: "missing privy token" }, { status: 401 });
