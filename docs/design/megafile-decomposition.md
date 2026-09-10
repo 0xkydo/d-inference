@@ -1,6 +1,6 @@
 # Megafile decomposition — target file map and move-only rules
 
-> Last updated: 2026-09-10 · commit `4742dc9ae`
+> Last updated: 2026-09-10 · commit `f6d0b23f1`
 
 Status: In progress — 2026-09-10 (Shard B2 of [repo-cleanup.md](repo-cleanup.md); sub-shards land as separate PRs)
 
@@ -52,7 +52,7 @@ cost and lets later shards own one concern each.
 
 | Sub-shard | Files | PR |
 |---|---|---|
-| B2a | `api/consumer.go` | — |
+| B2a | `api/consumer.go` | #6 |
 | B2b | `api/dispatch.go`, `api/provider.go` | — |
 | B2c | `api/server.go` | — |
 | B2d | `registry/registry.go`, `registry/scheduler.go` | — |
@@ -78,12 +78,33 @@ and error sentinels travel with the code that reads them.
 | `consumer_responses.go` | Chat-completion → Responses API envelope conversion | `buildResponsesUsage` … `chatCompletionToResponses` 3907–4085 |
 | `consumer_account.go` | Non-inference consumer endpoints | `createAPIKeyRequest`, `handleHealth`, `handleVersion`, `handleBalance`, `handleUsage`, `handleProviderEarnings` |
 
-### 4.2–4.5
+### 4.2 `api/dispatch.go` → 6 files
 
-Maps for `dispatch.go`, `provider.go`, `server.go`, `registry.go`,
-`scheduler.go`, `postgres.go` are added to this record by the PR that opens
-each sub-shard, using the outline in the cleanup inventory and the same
-assignment rule. A sub-shard PR may not start until its map is in this file.
+| Target | Concern | Anchors (line ranges at `4742dc9a`) |
+|---|---|---|
+| `dispatch.go` | Per-request state, outcome enum, orchestrator | `dispatchOutcome` + `outcome*` consts 52–76, `dispatchTerminalFailure`, `dispatchState` 91–288 and its small accessors `traits`, `configurePending`, `excludedProviderIDs`, `shouldQueueCompatibleProvider`, `run` 3454–3734 |
+| `dispatch_policy.go` | Kill switches and queue TTFT ceiling | `envTTFTTerminalReject`, `ttftTerminalRejectEnabled`, `envJinjaTerminalReject`, `jinjaTerminalRejectEnabled`, `jinjaTerminalRejectMessage`, `queueMaxTTFTMs` 340–392 |
+| `dispatch_routing_outcome.go` | Routing-decision ledger writes and outcome updates | `routingOutcomeKey`, `recordRoutingDecision*`, `timingMsBetween`, `applyTimingDecomposition`, `commitFirstContent`, `successRoutingOutcomeFor`, `errorRoutingOutcome*`, `recordProviderBodyTooLargeRoute`, `routeOutcomeUsesProviderErrorText`, `providerReportedBudget`, `providerFailedRoutingOutcome*`, `queuedExitOutcome`, `closeQueuedAttempt`, `rejectionInfo*`, `dispatchRoutingAttempt`, `routingAttempt`, `currentOrCapturedRoutingAttempt`, `updateRoutingOutcome*`, `markSpeculativeLoser`, `updateSpeculative*`, `emitClientGone`, `rejectionReason*` consts 1812–1843, `errQueueDeadlineExpired` |
+| `dispatch_failure.go` | Error latching, terminal-failure classification, failover stop rule | `setLastError`, `isGenuinePreContentFault`, `terminalFailureFromMessage`, `captureGenuineFault`, `currentTerminalFailure`, `terminalFailureForExhaustion`, `classifyExhaustedStatus`, `exhaustedDominance` + consts, `resolveDominantExhaustedStatus`, `noteProviderBodyTooLarge*`, `preflightLegacyCacheBust`, `latchProviderBodyTooLarge`, `setLastInferenceError`, `isTerminalClientErrorCode`, `dispatchErrorClass`, `noteDispatchRetry`, `noteProviderError`, `shouldStopFailover`, `latchJinjaTerminalReject`, `latchDeterministicLoser` |
+| `dispatch_primary.go` | Provider selection + reservation for one attempt | `dispatchPrimary` 1224–1764 |
+| `dispatch_wait.go` | Speculative TTFT-aware first-chunk wait, race arms, post-accept wait, committed write | section `---- Speculative TTFT-aware first-chunk wait ----`, `waitFirstChunk`, `runSpeculative`, `waitNoBackup`, `emptyCompletionPrecedesChunk`, `awaitPrimaryEmptyCompletion`, `awaitBackupEmptyCompletion`, `runRace`, `race*` 2949–3271, `waitAccepted`, `contentLatency`, `adjustLatencyForPrefill`, `shouldRecordReputationLatency`, `writeCommittedResponse` |
+
+### 4.3 `api/provider.go` → 5 files
+
+| Target | Concern | Anchors (line ranges at `4742dc9a`) |
+|---|---|---|
+| `provider.go` | WebSocket upgrade, session lifecycle, read loop, models update | `handleProviderWS`, `maxProviderVersionLength`, `sessionDisconnectReason`, `readErrorReason*`, `readErrorDisconnectReason`, `closeSessionWithReason`, `providerReadLoop` 234–842, `validLoadModelStatus`, `handleModelsUpdate`, `attachProviderLocation` |
+| `provider_challenge.go` | Periodic attestation challenges and response verification | `DefaultChallengeInterval`, `ChallengeResponseTimeout`, `RegistrationAttestationMaxAge`, `RegistrationAttestationMaxFutureSkew`, `minProviderVersionForReconnectAttestation`, `MaxConsecutiveChallengeTimeoutsBeforeReconnect`, `pendingChallenge`, `challengeTracker` + methods, `CodeAttestResponseTimeout`, `challengeLoop`, `generateNonce`, `sendChallenge`, `handleAttestationResponse`, `verifyChallengeResponse` 1138–1659, `verificationSubmitPriority`, `applyChallengeRuntimePolicy`, `applyChallengeMinVersionPolicy`, `handleTransientChallengeFailure`, `handleChallengeFailure` |
+| `provider_inference_msgs.go` | Inference-side provider messages: chunk, accepted, complete, inference_error | `cacheSelectionTerminalTags`, `emitCacheSelectionTerminal`, `cacheSelectionTTFTSample`, `emitCacheSelectionTTFT`, `handleChunk`, `chunkOverflowGrace`, `sendChunkWithGrace`, `decryptTextResponseChunk`, `errTextChunkViolation`, `textChunkViolationError` + method, `handleInferenceAccepted`, `maxPlausibleDecodeTPS`, `handleComplete`, `handleCompleteAt` 2031–2736, `handleInferenceError`, `handleInferenceErrorOwned` |
+| `provider_attestation.go` | Secure Enclave / MDM / Apple device attestation and trust status | `verifyProviderAttestation` 3003–3221, `mdmVerifyOutcome` + consts, `verifyProviderViaMDM`, `ApplyLateSecurityInfo`, `stageDurableMDAChain`, `attachCachedMDAProof`, `verifyAppleDeviceAttestation`, `sendTrustStatus` |
+| `provider_attestation_status.go` | Redacted trust-status HTTP endpoint and its cache | `providerAttestationCacheTTL`, `providerAttestationCacheKey`, `handleProviderAttestation` |
+
+### 4.4–4.6
+
+Maps for `server.go`, `registry.go`, `scheduler.go`, and `postgres.go` are
+added to this record by the PR that opens each sub-shard, using the outline in
+the cleanup inventory and the same assignment rule. A sub-shard PR may not
+start until its map is in this file.
 
 ## 5. Deferred (explicitly out of this shard)
 
