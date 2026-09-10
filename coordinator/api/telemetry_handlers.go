@@ -276,19 +276,6 @@ type telemetryAuthContext struct {
 	Anon      bool
 }
 
-// RateLimitKey derives a stable per-submitter key. Anonymous submitters get a
-// coarse bucket per source IP hash so flood attacks don't exhaust memory.
-func (a telemetryAuthContext) RateLimitKey() string {
-	switch {
-	case a.MachineID != "":
-		return "m:" + a.MachineID
-	case a.AccountID != "":
-		return "a:" + a.AccountID
-	default:
-		return "anon"
-	}
-}
-
 // sanitizeTelemetryEvent normalizes and validates an incoming event, returning
 // the persistent record and a boolean indicating whether to keep it.
 func sanitizeTelemetryEvent(

@@ -156,7 +156,7 @@ func TestCacheBustSpliceMatchesReencode(t *testing.T) {
 // body is canonical.
 func TestCacheBustSplicePropertyMatchesReencode(t *testing.T) {
 	rnd := rand.New(rand.NewPCG(5, 8))
-	keys := []string{"a", "model", "messages", "prompt_cache_key", "zeta", "x<y>", "k\"q", "ключ", "tab\there", "prompt_cache_key2", "", "Z"}
+	keys := []string{"a", "model", "messages", "prompt_cache_key", "zeta", "x<y>", "k\"q", "ключ", "tab\there", "prompt_cache_key2", "\x7f", "Z"}
 	values := []string{"", "plain", "quote\" backslash\\", "\n\t\b", "<html>&", "line\u2028sep", "bad\xffutf8", "emoji 🎉", "}{][,:"}
 	var gen func(depth int) any
 	gen = func(depth int) any {

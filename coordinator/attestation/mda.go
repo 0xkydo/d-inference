@@ -280,11 +280,6 @@ func VerifyMDACertChain(certChainPEM []byte, appleRootCA *x509.Certificate) (*MD
 	return result, nil
 }
 
-// GetAppleEnterpriseAttestationRootCA returns the embedded Apple Root CA.
-func GetAppleEnterpriseAttestationRootCA() *x509.Certificate {
-	return appleEnterpriseAttestationRootCA
-}
-
 // parsePEMCertificates parses a PEM-encoded certificate chain.
 func parsePEMCertificates(pemData []byte) ([]*x509.Certificate, error) {
 	var certs []*x509.Certificate

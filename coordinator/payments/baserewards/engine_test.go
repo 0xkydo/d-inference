@@ -38,7 +38,7 @@ func newEngineStore() *engineStore {
 func (s *engineStore) ListProviderSessionsOverlapping(_ context.Context, start, end time.Time, openSessionGrace time.Duration) ([]store.ProviderSession, error) {
 	out := []store.ProviderSession{}
 	for _, ps := range s.sessions {
-		sessEnd := ps.LastSeen
+		var sessEnd time.Time
 		if ps.DisconnectedAt != nil {
 			sessEnd = *ps.DisconnectedAt
 		} else {

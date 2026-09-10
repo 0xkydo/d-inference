@@ -40,14 +40,6 @@ const simProviderPublicKey = "fX6XYH7p2hmM3ogeXaAsY+p8M6UKD1df/LJUN9Nj9Nw="
 // It must be deterministic in i so a simulation run is reproducible.
 type DecodeTPSDist func(i, n int) float64
 
-// ConstantDecodeTPS returns a distribution where every provider has the same
-// static decode tokens/sec. Because the preflight's bestTTFT is the minimum
-// across all candidates, a homogeneous fleet produces a hard, fleet-wide TTFT
-// cliff — the prod failure mode this harness reproduces.
-func ConstantDecodeTPS(tps float64) DecodeTPSDist {
-	return func(i, n int) float64 { return tps }
-}
-
 // ClusteredDecodeTPS returns a deterministic distribution centered on median
 // with a bounded symmetric integer spread, i.e. values cycle through
 // [median-spread, median+spread]. The median is preserved and the fastest

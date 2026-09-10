@@ -71,7 +71,7 @@ func TestStatsCachePreservesSourceTimeUntilSuccessfulRefresh(t *testing.T) {
 					t.Fatalf("snapshot_at = %v, want observation start %v", capturedAt, startedAt)
 				}
 				memory.RecordUsageWithCostAndLocation("provider", "consumer", "model", "request", 10, 20, 0, nil)
-				time.Sleep(startedAt.Add(30*time.Second - time.Nanosecond).Sub(time.Now()))
+				time.Sleep(time.Until(startedAt.Add(30*time.Second - time.Nanosecond)))
 				cachedBody, _, _ := readStatsSnapshot(t, srv)
 				if !bytes.Equal(cachedBody, initialBody) {
 					t.Fatal("cache hit changed the body or source timestamp")
@@ -154,7 +154,7 @@ func TestStatsFailedRefreshPreservesTimestampAndSafetyExpiry(t *testing.T) {
 		}
 
 		// A failed attempt must not reset the upstream's existing safety TTL.
-		time.Sleep(startedAt.Add(5*time.Minute - time.Nanosecond).Sub(time.Now()))
+		time.Sleep(time.Until(startedAt.Add(5*time.Minute - time.Nanosecond)))
 		served, _, _ = readStatsSnapshot(t, srv)
 		if !bytes.Equal(served, initialBody) {
 			t.Fatal("unexpired success disappeared during the outage")

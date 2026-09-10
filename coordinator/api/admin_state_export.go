@@ -38,13 +38,6 @@ func resolveStateExportRoot() string {
 	)
 }
 
-// envTrue reports whether the named env var is set to "true" (case-insensitive,
-// trimmed). Used for the boolean state-export gates.
-func envTrue(name string) bool {
-	b, _ := strconv.ParseBool(strings.TrimSpace(os.Getenv(name)))
-	return b
-}
-
 // handleAdminStateExport handles GET /v1/admin/state-export — it streams a
 // consistent (and, by default, encrypted) archive of the coordinator's sealed
 // on-disk state under /data for migration off EigenCloud (DAR-70).
@@ -58,7 +51,7 @@ func (s *Server) handleAdminStateExport(w http.ResponseWriter, r *http.Request) 
 
 	// (a) Master switch — 404 when disabled so the route is indistinguishable
 	// from an unregistered path.
-	if !envTrue(envStateExportEnabled) {
+	if !env.EnvBool(envStateExportEnabled, false) {
 		http.NotFound(w, r)
 		return
 	}
@@ -86,7 +79,7 @@ func (s *Server) handleAdminStateExport(w http.ResponseWriter, r *http.Request) 
 
 	// (c) Output protection. Encrypted by default.
 	recipientStr := strings.TrimSpace(os.Getenv(envStateExportRecipient))
-	allowPlaintext := envTrue(envStateExportAllowPlaintext)
+	allowPlaintext := env.EnvBool(envStateExportAllowPlaintext, false)
 	encrypted := recipientStr != ""
 
 	if !encrypted && !allowPlaintext {
